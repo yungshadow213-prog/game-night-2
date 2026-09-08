@@ -1,6 +1,6 @@
 {
   "name": "game-night",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Game Night - private two-player real-time game app",
   "main": "server.js",
