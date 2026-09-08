@@ -1,3 +1,4 @@
+[README.md](https://github.com/user-attachments/files/31948137/README.md)
 # Game Night — polished redesign build
 
 This build keeps the existing private two-player Socket.IO backend and upgrades the interface into a polished app-style dashboard.
