@@ -1,12 +1,9 @@
 {
   "connections": {
-    "05e49a4d1ddfcf6776b59078f0289cbb7723": {
-      "code": "SALNU",
+    "16752113aa30cb16a7ee08a4212da785fa95": {
+      "code": "OU0SL",
       "name": "DEE",
-      "avatar": "🌙",
-      "accountId": null
+      "avatar": "🌙"
     }
-  },
-  "users": {},
-  "authSessions": {}
+  }
 }
