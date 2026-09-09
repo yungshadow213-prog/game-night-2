@@ -62,20 +62,6 @@ const QUESTIONS = {
     "What would I probably choose as our shared wallpaper theme?",
     "Teasing round: what silly thing would I pretend not to care about?"
   ],
-  "Couple Quiz": [
-    "Who is more likely to start a random conversation?",
-    "Who is more likely to remember a tiny detail?",
-    "Who is more likely to turn a simple game into a competition?",
-    "Who is more likely to send a sweet message first?",
-    "Who is more likely to make the other laugh when they are quiet?",
-    "Bold round: who is more likely to accept a silly challenge immediately?",
-    "Who is more likely to plan a surprise?",
-    "Who is more likely to say “one more round” five times?",
-    "Who is more likely to notice a mood change first?",
-    "Who is more likely to give a dramatic compliment?",
-    "Who is more likely to save a funny message?",
-    "Teasing round: who is more likely to pretend they are not jealous of losing a game?"
-  ],
   "Truth or Dare — Lite": [
     "Truth: What is one wholesome thing you genuinely appreciate about the other player?",
     "Truth: What funny memory always makes you smile?",
@@ -202,20 +188,6 @@ const QUESTIONS = {
     "Choose a card for a warm appreciation prompt.",
     "Teasing round: choose who gets the “most dramatic” card."
   ],
-  "Mini Tournament": [
-    "Round 1: pick the player most likely to win a trivia sprint.",
-    "Round 2: pick the player most likely to win a reaction challenge.",
-    "Round 3: pick the player most likely to plan the better date night.",
-    "Round 4: pick the player most likely to remember details.",
-    "Round 5: pick the player most likely to make the other laugh.",
-    "Bold but wholesome: pick the player most likely to accept a silly challenge.",
-    "Pick the player most likely to become MVP.",
-    "Pick the player most likely to choose the best music.",
-    "Pick the player most likely to win a drawing duel.",
-    "Pick the player most likely to give the better compliment.",
-    "Pick the player most likely to keep the streak alive.",
-    "Teasing round: pick the player most likely to demand a rematch."
-  ],
   "Night Roulette": [
     "Tonight’s random choice: cozy chat or quick game?",
     "Tonight’s random choice: music or movie?",
@@ -244,7 +216,6 @@ const DATE_NIGHTS = [
   {title:'Drawing Duel', desc:'Choose a silly prompt and draw for five minutes.'},
   {title:'Memory Lane', desc:'Take turns sharing favorite memories and funny moments.'},
   {title:'Two Truths & A Lie', desc:'Three statements each. Guess the lie.'},
-  {title:'Mini Tournament', desc:'Play three quick games and crown the night champion.'},
   {title:'No-Plan Night', desc:'Flip a coin for every tiny decision and see where the night goes.'}
 ];
 
@@ -254,12 +225,12 @@ const makeCode=()=>Math.random().toString(36).slice(2,7).toUpperCase();
 const dayKey=()=>new Date().toISOString().slice(0,10);
 
 function roomStats(room){
-  return { games:room.gamesPlayed, sharedPoints:0, streak:room.streak, bestStreak:room.bestStreak, topScore:0 };
+  return { games:room.gamesPlayed, streak:room.streak, bestStreak:room.bestStreak };
 }
 function publicState(room){
   return {
     code:room.code,
-    players:[...room.players.values()].map(p=>({id:p.id,name:p.name,avatar:p.avatar,ready:p.ready,score:p.score,personalStreak:p.personalStreak,answered:p.answered})),
+    players:[...room.players.values()].map(p=>({id:p.id,name:p.name,avatar:p.avatar,ready:p.ready,answered:p.answered})),
     phase:room.phase, round:room.round, totalRounds:room.totalRounds,
     category:room.category, question:room.question, music:room.music,
     gameMode:room.gameMode, chatEnabled:room.chatEnabled,
@@ -294,33 +265,32 @@ function finishGame(room){
     room.streak = room.lastCompletedDay===y ? room.streak+1 : 1;
     room.bestStreak=Math.max(room.bestStreak,room.streak); room.lastCompletedDay=k;
   }
-  room.lastWinner=null;
   saveData(); broadcast(room);
-  io.to(room.code).emit('game_finished',{winnerId:null,stats:roomStats(room),players:[...room.players.values()].map(p=>({id:p.id,name:p.name,avatar:p.avatar}))});
+  io.to(room.code).emit('game_finished',{stats:roomStats(room),players:[...room.players.values()].map(p=>({id:p.id,name:p.name,avatar:p.avatar}))});
 }
 function loadShared(room){
   const d=sharedData[room.code]; if(!d)return;
-  Object.assign(room,{gamesPlayed:d.gamesPlayed||0,sharedPoints:d.sharedPoints||0,streak:d.streak||0,bestStreak:d.bestStreak||0,lastCompletedDay:d.lastCompletedDay||null});
+  Object.assign(room,{gamesPlayed:d.gamesPlayed||0,streak:d.streak||0,bestStreak:d.bestStreak||0,lastCompletedDay:d.lastCompletedDay||null});
 }
 function saveRoom(room){
-  sharedData[room.code]={gamesPlayed:room.gamesPlayed,sharedPoints:room.sharedPoints,streak:room.streak,bestStreak:room.bestStreak,lastCompletedDay:room.lastCompletedDay}; saveData();
+  sharedData[room.code]={gamesPlayed:room.gamesPlayed,streak:room.streak,bestStreak:room.bestStreak,lastCompletedDay:room.lastCompletedDay}; saveData();
 }
 
 io.on('connection',socket=>{
   socket.on('resume_session',session=>{
     ensureConnections(); const rec=sharedData.connections?.[clean(session,80)]; if(!rec)return socket.emit('resume_failed');
     let room=rooms.get(rec.code);
-    if(!room){ room={code:rec.code,players:new Map(),sessions:new Map(),phase:'lobby',round:0,totalRounds:5,category:'Would You Rather',question:'',music:'romantic',chatEnabled:true,chat:[],gameMode:'Classic',dateNight:null,createdAt:Date.now(),gamesPlayed:0,sharedPoints:0,streak:0,bestStreak:0,lastCompletedDay:null,lastWinner:null}; loadShared(room); rooms.set(room.code,room); }
+    if(!room){ room={code:rec.code,players:new Map(),sessions:new Map(),phase:'lobby',round:0,totalRounds:5,category:'Would You Rather',question:'',music:'romantic',chatEnabled:true,chat:[],gameMode:'Classic',dateNight:null,createdAt:Date.now(),gamesPlayed:0,streak:0,bestStreak:0,lastCompletedDay:null}; loadShared(room); rooms.set(room.code,room); }
     if(room.players.size>=2)return socket.emit('resume_failed');
-    const old=room.sessions.get(session)||{}; const player={...old,id:socket.id,session,name:rec.name||old.name||'Player',avatar:rec.avatar||old.avatar||'🌙',ready:false,score:0,personalStreak:0,answered:false,lastAnswer:null,lastChat:0};
+    const old=room.sessions.get(session)||{}; const player={...old,id:socket.id,session,name:rec.name||old.name||'Player',avatar:rec.avatar||old.avatar||'🌙',ready:false,personalStreak:0,answered:false,lastAnswer:null,lastChat:0};
     room.players.set(socket.id,player); room.sessions.set(session,player); socket.join(room.code); socket.data.room=room.code; socket.data.session=session;
     socket.emit('resumed',{code:room.code,session}); socket.emit('chat_history',room.chat); broadcast(room);
   });
   socket.on('create_room',payload=>{
     let code; do{code=makeCode();}while(rooms.has(code));
-    const room={code,players:new Map(),sessions:new Map(),phase:'lobby',round:0,totalRounds:5,category:'Would You Rather',question:'',music:'romantic',chatEnabled:true,chat:[],gameMode:'Classic',dateNight:null,createdAt:Date.now(),gamesPlayed:0,sharedPoints:0,streak:0,bestStreak:0,lastCompletedDay:null,lastWinner:null};
+    const room={code,players:new Map(),sessions:new Map(),phase:'lobby',round:0,totalRounds:5,category:'Would You Rather',question:'',music:'romantic',chatEnabled:true,chat:[],gameMode:'Classic',dateNight:null,createdAt:Date.now(),gamesPlayed:0,streak:0,bestStreak:0};
     loadShared(room);
-    const session=token(); const player={id:socket.id,session,name:clean(payload?.name,20)||'Player',avatar:safeAvatar(payload?.avatar),ready:false,score:0,personalStreak:0,answered:false,lastAnswer:null,lastChat:0};
+    const session=token(); const player={id:socket.id,session,name:clean(payload?.name,20)||'Player',avatar:safeAvatar(payload?.avatar),ready:false,personalStreak:0,answered:false,lastAnswer:null,lastChat:0};
     room.players.set(socket.id,player); rooms.set(code,room); room.sessions.set(session,player); sharedData.connections[session]={code,name:player.name,avatar:player.avatar}; saveData(); socket.join(code); socket.data.room=code; socket.data.session=session;
     socket.emit('room_created',{code,session}); socket.emit('chat_history',room.chat); broadcast(room);
   });
@@ -330,7 +300,7 @@ io.on('connection',socket=>{
     if(!room)return socket.emit('error_message','Room not found.');
     if(room.players.size>=2)return socket.emit('error_message','This private room already has two players.');
     if(room.phase!=='lobby')return socket.emit('error_message','The game has already started.');
-    const session=clean(payload?.session,80)||token(); const player={id:socket.id,session,name:clean(payload?.name,20)||'Player',avatar:safeAvatar(payload?.avatar),ready:false,score:0,personalStreak:0,answered:false,lastAnswer:null,lastChat:0};
+    const session=clean(payload?.session,80)||token(); const player={id:socket.id,session,name:clean(payload?.name,20)||'Player',avatar:safeAvatar(payload?.avatar),ready:false,personalStreak:0,answered:false,lastAnswer:null,lastChat:0};
     room.players.set(socket.id,player); room.sessions.set(session,player); sharedData.connections[session]={code,name:player.name,avatar:player.avatar}; saveData(); socket.join(code); socket.data.room=code; socket.data.session=session;
     socket.emit('joined_room',{code,session}); socket.emit('chat_history',room.chat); systemChat(room,`${player.name} joined the room.`); broadcast(room);
   });
@@ -347,16 +317,16 @@ io.on('connection',socket=>{
   socket.on('set_mode',mode=>{const room=getRoom(socket);if(!room||room.phase!=='lobby'||!['Classic','Chaos','Quick Play'].includes(mode))return;room.gameMode=mode;if(mode==='Quick Play')room.totalRounds=Math.min(room.totalRounds,3);broadcast(room);});
   socket.on('set_chat_enabled',enabled=>{const room=getRoom(socket);if(!room)return;room.chatEnabled=!!enabled;broadcast(room);systemChat(room,room.chatEnabled?'Chat enabled.':'Chat disabled.');});
 
-  socket.on('start_game',()=>{const room=getRoom(socket);if(!room)return;if(room.players.size!==2)return socket.emit('error_message','Both players need to join first.');room.round=0;room.dateNight=null;room.players.forEach(p=>{p.score=0;p.personalStreak=0;});startRound(room);});
-  socket.on('submit_answer',answer=>{const room=getRoom(socket),p=getPlayer(room,socket);if(!room||!p||room.phase!=='game'||p.answered)return;p.lastAnswer=clean(answer,300);p.answered=true;socket.emit('answer_saved',{points:0,streak:p.personalStreak,bonus:'Response saved — no score, just your answer 💬'});broadcast(room);if([...room.players.values()].every(x=>x.answered))finishRound(room);});
+  socket.on('start_game',()=>{const room=getRoom(socket);if(!room)return;if(room.players.size!==2)return socket.emit('error_message','Both players need to join first.');room.round=0;room.dateNight=null;room.players.forEach(p=>{p.personalStreak=0;});startRound(room);});
+  socket.on('submit_answer',answer=>{const room=getRoom(socket),p=getPlayer(room,socket);if(!room||!p||room.phase!=='game'||p.answered)return;p.lastAnswer=clean(answer,300);p.answered=true;socket.emit('answer_saved',{streak:p.personalStreak,message:'Response saved — just your answer 💬'});broadcast(room);if([...room.players.values()].every(x=>x.answered))finishRound(room);});
   socket.on('next_round',()=>{const room=getRoom(socket);if(!room||room.phase!=='results')return;if(room.round>=room.totalRounds){finishGame(room);return;}startRound(room);});
-  socket.on('rematch',()=>{const room=getRoom(socket);if(!room)return;room.phase='lobby';room.round=0;room.question='';room.dateNight=null;room.players.forEach(p=>{p.ready=false;p.score=0;p.personalStreak=0;p.answered=false;p.lastAnswer=null;});broadcast(room);systemChat(room,'Rematch ready — both players can ready up again.');});
+  socket.on('rematch',()=>{const room=getRoom(socket);if(!room)return;room.phase='lobby';room.round=0;room.question='';room.dateNight=null;room.players.forEach(p=>{p.ready=false;p.personalStreak=0;p.answered=false;p.lastAnswer=null;});broadcast(room);systemChat(room,'Rematch ready — both players can ready up again.');});
   socket.on('date_night',()=>{const room=getRoom(socket);if(!room)return;room.dateNight=DATE_NIGHTS[Math.floor(Math.random()*DATE_NIGHTS.length)];broadcast(room);systemChat(room,`Date Night pick: ${room.dateNight.title}`);io.to(room.code).emit('date_night_pick',room.dateNight);});
   socket.on('chat',text=>{const room=getRoom(socket),p=getPlayer(room,socket);if(!room||!p||!room.chatEnabled)return;const message=clean(text,300);if(!message)return;const now=Date.now();if(now-p.lastChat<700)return;p.lastChat=now;const msg={id:socket.id,name:p.name,avatar:p.avatar,text:message,time:now};room.chat.push(msg);if(room.chat.length>150)room.chat.shift();io.to(room.code).emit('chat',msg);io.to(room.code).emit('typing',null);});
   socket.on('draw_stroke',d=>{const room=getRoom(socket),p=getPlayer(room,socket);if(!room||!p||room.phase!=='game')return;socket.to(room.code).emit('draw_stroke',{from:Array.isArray(d?.from)?d.from.slice(0,2):[0,0],to:Array.isArray(d?.to)?d.to.slice(0,2):[0,0]});});
   socket.on('draw_clear',()=>{const room=getRoom(socket);if(room&&room.phase==='game')socket.to(room.code).emit('draw_clear');});
   socket.on('typing',isTyping=>{const room=getRoom(socket),p=getPlayer(room,socket);if(!room||!p||!room.chatEnabled)return;socket.to(room.code).emit('typing',isTyping?p.name:null);});
-  socket.on('disconnect',()=>{const room=getRoom(socket);if(!room)return;const p=room.players.get(socket.id);room.players.delete(socket.id);if(p)systemChat(room,`${p.name} left the room.`);if(p?.session) room.sessions.set(p.session,{...p,id:null}); saveRoom(room); if(room.players.size>0){room.phase='lobby';room.round=0;room.question='';room.players.forEach(x=>{x.ready=false;x.score=0;x.personalStreak=0;x.answered=false;});broadcast(room);} else { room.phase='lobby'; room.round=0; saveData(); }});
+  socket.on('disconnect',()=>{const room=getRoom(socket);if(!room)return;const p=room.players.get(socket.id);room.players.delete(socket.id);if(p)systemChat(room,`${p.name} left the room.`);if(p?.session) room.sessions.set(p.session,{...p,id:null}); saveRoom(room); if(room.players.size>0){room.phase='lobby';room.round=0;room.question='';room.players.forEach(x=>{x.ready=false;x.personalStreak=0;x.answered=false;});broadcast(room);} else { room.phase='lobby'; room.round=0; saveData(); }});
 });
 
 const PORT=process.env.PORT||3000;
