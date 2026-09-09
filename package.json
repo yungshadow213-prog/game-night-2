@@ -8,8 +8,8 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.21.2",
-    "socket.io": "^4.8.1",
-    "google-auth-library": "^9.14.1"
-  }
+  "express": "^4.21.2",
+  "socket.io": "^4.8.1",
+  "google-auth-library": "^10.4.0"
+}
 }
