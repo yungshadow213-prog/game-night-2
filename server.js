@@ -3,11 +3,28 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const { Server } = require('socket.io');
+const { OAuth2Client } = require('google-auth-library');
+const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: true, credentials: true } });
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json({limit:'1mb'}));
+const GOOGLE_CLIENT_ID=process.env.GOOGLE_CLIENT_ID||'';
+const googleClient=GOOGLE_CLIENT_ID?new OAuth2Client(GOOGLE_CLIENT_ID):null;
+app.get('/api/config',(req,res)=>res.json({googleClientId:GOOGLE_CLIENT_ID}));
+app.post('/api/auth/google',async(req,res)=>{
+  try{
+    if(!googleClient)return res.status(503).json({error:'Google sign-in is not configured.'});
+    const ticket=await googleClient.verifyIdToken({idToken:String(req.body?.credential||''),audience:GOOGLE_CLIENT_ID});
+    const p=ticket.getPayload(); if(!p?.sub)return res.status(401).json({error:'Invalid Google credential.'});
+    sharedData.accounts ||= {};
+    let account=sharedData.accounts[p.sub]||{id:crypto.randomUUID(),provider:'google',googleSub:p.sub,name:clean(p.name,20)||'Player',email:clean(p.email,120),picture:String(p.picture||'').slice(0,1000),createdAt:Date.now()};
+    account.name=clean(account.name||p.name||'Player',20)||'Player'; account.email=clean(account.email||p.email||'',120); account.picture=String(account.picture||p.picture||'').slice(0,1000); account.updatedAt=Date.now(); account.session=token(); sharedData.accounts[p.sub]=account; sharedData.accountSessions ||= {}; sharedData.accountSessions[account.session]=account.id; saveData();
+    res.json({account:{id:account.id,name:account.name,email:account.email,picture:account.picture,authenticated:true,session:account.session}});
+  }catch(e){res.status(401).json({error:'Google credential verification failed.'});}
+});
 
 const rooms = new Map();
 const DATA_FILE = path.join(__dirname, 'gamenight-data.json');
@@ -16,7 +33,8 @@ try { sharedData = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch { sha
 function saveData(){ try { fs.writeFileSync(DATA_FILE, JSON.stringify(sharedData, null, 2)); } catch {} }
 function token(){ return require('crypto').randomBytes(18).toString('hex'); }
 function ensureConnections(){ if(!sharedData.connections) sharedData.connections={}; }
-ensureConnections();
+function accountForPayload(payload){ const id=clean(payload?.accountId,100); const a=id?Object.values(sharedData.accounts||{}).find(x=>x.id===id):null; return a||null; }
+ensureConnections(); if(!sharedData.accounts)sharedData.accounts={}; if(!sharedData.accountSessions)sharedData.accountSessions={};
 
 const AVATARS = ['🌙','✨','🦋','🐈','🐼','🦊','🐰','🐻','🐱','🌸','⭐','🍓','🎀','🩷','🖤','🌌'];
 const QUESTIONS = {
@@ -62,7 +80,7 @@ const QUESTIONS = {
     "What would I probably choose as our shared wallpaper theme?",
     "Teasing round: what silly thing would I pretend not to care about?"
   ],
-  "Truth or Dare — Lite": [
+  "Truth or Dare": [
     "Truth: What is one wholesome thing you genuinely appreciate about the other player?",
     "Truth: What funny memory always makes you smile?",
     "Dare: Give the other player a ridiculous nickname for one round.",
@@ -90,7 +108,7 @@ const QUESTIONS = {
     "What kind of wholesome surprise would feel especially sweet?",
     "Teasing round: who is more likely to deny being the more dramatic one?"
   ],
-  "Drawing Duel": [
+  "Draw & Guess — Live": [
     "Draw the other player as a superhero.",
     "Draw your duo as a cute cartoon.",
     "Draw your dream hangout in five minutes.",
@@ -103,34 +121,6 @@ const QUESTIONS = {
     "Draw a wholesome romantic-comedy poster for your duo.",
     "Draw the other player as a game character.",
     "Teasing round: draw who is more dramatic without using words."
-  ],
-  "Music Swap": [
-    "Pick a song vibe that matches your mood and explain why.",
-    "Choose a song that would make the other player laugh.",
-    "Pick a calm track for a late-night chat.",
-    "Choose a song that feels like a victory theme for your duo.",
-    "Pick a song vibe that reminds you of a favorite memory.",
-    "Bold but wholesome: choose a song title that would be a funny nickname for your duo.",
-    "Pick a song that sounds like a playful challenge.",
-    "Choose a song for a future date-night playlist.",
-    "Pick a song that feels warm and comforting.",
-    "Choose a song that matches your funniest shared moment.",
-    "Pick a song that would fit a romantic-comedy scene.",
-    "Teasing round: pick a song that describes who is more dramatic."
-  ],
-  "Watch Together": [
-    "What genre would you choose for a cozy watch night?",
-    "Who gets to pick the first episode?",
-    "What kind of scene usually makes you laugh?",
-    "What rating would you give your duo as a watch-party team?",
-    "Would you pause to discuss or save reactions for the end?",
-    "Bold but wholesome: choose a ridiculous movie challenge for the night.",
-    "What snack would you bring to the virtual watch party?",
-    "Who is more likely to predict the ending?",
-    "What genre would surprise you if the other player picked it?",
-    "What would your watch-party title be?",
-    "What kind of wholesome movie moment would make you both smile?",
-    "Teasing round: who would complain about spoilers first?"
   ],
   "Two Truths & A Lie": [
     "Share three harmless facts and let the other player guess the lie.",
@@ -187,25 +177,7 @@ const QUESTIONS = {
     "Choose a card for a silly confession.",
     "Choose a card for a warm appreciation prompt.",
     "Teasing round: choose who gets the “most dramatic” card."
-  ],
-  "Night Roulette": [
-    "Tonight’s random choice: cozy chat or quick game?",
-    "Tonight’s random choice: music or movie?",
-    "Tonight’s random choice: compliment or challenge?",
-    "Tonight’s random choice: memory or future plan?",
-    "Tonight’s random choice: calm or chaotic?",
-    "Bold but wholesome: tonight’s choice is a harmless daring question or a silly dare.",
-    "Tonight’s random choice: drawing or trivia?",
-    "Tonight’s random choice: sweet message or funny message?",
-    "Tonight’s random choice: playlist or watch party?",
-    "Tonight’s random choice: old memory or new idea?",
-    "Tonight’s random choice: romantic-comedy vibe or adventure vibe?",
-    "Teasing round: tonight’s choice is “who is more dramatic?”"
   ]
-  ,"Finish The Sentence":["If we had one free evening, I would...","The funniest thing about our duo is...","A perfect game-night snack is...","One thing I would always choose is...","The next thing we should try is...","Something that instantly makes me laugh is..."]
-  ,"Emoji Story":["Tell a tiny story about tonight using emojis.","Describe your mood with a mini emoji plot.","Make a funny story about a game-night disaster.","Build a cute adventure using emojis.","Describe your ideal weekend in emojis.","Create a mystery story in emojis."]
-  ,"Guess The Sound":["What kind of sound fits your mood right now?","What sound would match a dramatic entrance?","What sound would match a perfect win?","What sound would make the other player laugh?","What sound belongs in a cozy night?","What sound would describe chaos?"]
-  ,"Memory Match":["What detail from a recent conversation do you remember best?","What was one of our funniest moments?","What activity did we say we should try?","What small preference do you remember about me?","What was the vibe of our last game night?","What is one thing you think I would remember about you?"]
 };
 const DATE_NIGHTS = [
   {title:'Cozy Movie Night', desc:'Pick a movie, grab snacks, and rate it together.'},
@@ -224,13 +196,11 @@ const safeAvatar = v=>{const x=String(v||'');if(AVATARS.includes(x))return x;if(
 const makeCode=()=>Math.random().toString(36).slice(2,7).toUpperCase();
 const dayKey=()=>new Date().toISOString().slice(0,10);
 
-function roomStats(room){
-  return { games:room.gamesPlayed, streak:room.streak, bestStreak:room.bestStreak };
-}
+function roomStats(room){ return { games:room.gamesPlayed, streak:room.streak, bestStreak:room.bestStreak }; }
 function publicState(room){
   return {
     code:room.code,
-    players:[...room.players.values()].map(p=>({id:p.id,name:p.name,avatar:p.avatar,ready:p.ready,answered:p.answered})),
+    players:[...room.players.values()].map(p=>({id:p.id,name:p.name,avatar:p.avatar,ready:p.ready,answered:p.answered,accountId:p.accountId})),
     phase:room.phase, round:room.round, totalRounds:room.totalRounds,
     category:room.category, question:room.question, music:room.music,
     gameMode:room.gameMode, chatEnabled:room.chatEnabled,
@@ -265,6 +235,7 @@ function finishGame(room){
     room.streak = room.lastCompletedDay===y ? room.streak+1 : 1;
     room.bestStreak=Math.max(room.bestStreak,room.streak); room.lastCompletedDay=k;
   }
+  
   saveData(); broadcast(room);
   io.to(room.code).emit('game_finished',{stats:roomStats(room),players:[...room.players.values()].map(p=>({id:p.id,name:p.name,avatar:p.avatar}))});
 }
@@ -282,16 +253,16 @@ io.on('connection',socket=>{
     let room=rooms.get(rec.code);
     if(!room){ room={code:rec.code,players:new Map(),sessions:new Map(),phase:'lobby',round:0,totalRounds:5,category:'Would You Rather',question:'',music:'romantic',chatEnabled:true,chat:[],gameMode:'Classic',dateNight:null,createdAt:Date.now(),gamesPlayed:0,streak:0,bestStreak:0,lastCompletedDay:null}; loadShared(room); rooms.set(room.code,room); }
     if(room.players.size>=2)return socket.emit('resume_failed');
-    const old=room.sessions.get(session)||{}; const player={...old,id:socket.id,session,name:rec.name||old.name||'Player',avatar:rec.avatar||old.avatar||'🌙',ready:false,personalStreak:0,answered:false,lastAnswer:null,lastChat:0};
+    const old=room.sessions.get(session)||{}; const acct=(sharedData.accounts&&rec.accountId)?Object.values(sharedData.accounts).find(a=>a.id===rec.accountId):null; const player={...old,id:socket.id,session,accountId:rec.accountId||old.accountId||null,name:acct?.name||rec.name||old.name||'Player',avatar:rec.avatar||old.avatar||'🌙',ready:false,answered:false,lastAnswer:null,lastChat:0};
     room.players.set(socket.id,player); room.sessions.set(session,player); socket.join(room.code); socket.data.room=room.code; socket.data.session=session;
     socket.emit('resumed',{code:room.code,session}); socket.emit('chat_history',room.chat); broadcast(room);
   });
   socket.on('create_room',payload=>{
     let code; do{code=makeCode();}while(rooms.has(code));
-    const room={code,players:new Map(),sessions:new Map(),phase:'lobby',round:0,totalRounds:5,category:'Would You Rather',question:'',music:'romantic',chatEnabled:true,chat:[],gameMode:'Classic',dateNight:null,createdAt:Date.now(),gamesPlayed:0,streak:0,bestStreak:0};
+    const room={code,players:new Map(),sessions:new Map(),phase:'lobby',round:0,totalRounds:5,category:'Would You Rather',question:'',music:'romantic',chatEnabled:true,chat:[],gameMode:'Classic',dateNight:null,createdAt:Date.now(),gamesPlayed:0,streak:0,bestStreak:0,lastCompletedDay:null};
     loadShared(room);
-    const session=token(); const player={id:socket.id,session,name:clean(payload?.name,20)||'Player',avatar:safeAvatar(payload?.avatar),ready:false,personalStreak:0,answered:false,lastAnswer:null,lastChat:0};
-    room.players.set(socket.id,player); rooms.set(code,room); room.sessions.set(session,player); sharedData.connections[session]={code,name:player.name,avatar:player.avatar}; saveData(); socket.join(code); socket.data.room=code; socket.data.session=session;
+    const acct=accountForPayload(payload); const session=acct?.session||token(); const player={id:socket.id,session,accountId:acct?.id||null,name:clean(acct?.name||payload?.name,20)||'Player',avatar:safeAvatar(payload?.avatar)||acct?.picture||'🌙',ready:false,answered:false,lastAnswer:null,lastChat:0};
+    room.players.set(socket.id,player); rooms.set(code,room); room.sessions.set(session,player); sharedData.connections[session]={code,name:player.name,avatar:player.avatar,accountId:player.accountId||null}; saveData(); socket.join(code); socket.data.room=code; socket.data.session=session;
     socket.emit('room_created',{code,session}); socket.emit('chat_history',room.chat); broadcast(room);
   });
 
@@ -300,14 +271,14 @@ io.on('connection',socket=>{
     if(!room)return socket.emit('error_message','Room not found.');
     if(room.players.size>=2)return socket.emit('error_message','This private room already has two players.');
     if(room.phase!=='lobby')return socket.emit('error_message','The game has already started.');
-    const session=clean(payload?.session,80)||token(); const player={id:socket.id,session,name:clean(payload?.name,20)||'Player',avatar:safeAvatar(payload?.avatar),ready:false,personalStreak:0,answered:false,lastAnswer:null,lastChat:0};
-    room.players.set(socket.id,player); room.sessions.set(session,player); sharedData.connections[session]={code,name:player.name,avatar:player.avatar}; saveData(); socket.join(code); socket.data.room=code; socket.data.session=session;
+    const acct=accountForPayload(payload); const session=clean(payload?.session,80)||acct?.session||token(); const player={id:socket.id,session,accountId:acct?.id||null,name:clean(acct?.name||payload?.name,20)||'Player',avatar:safeAvatar(payload?.avatar)||acct?.picture||'🌙',ready:false,answered:false,lastAnswer:null,lastChat:0};
+    room.players.set(socket.id,player); room.sessions.set(session,player); sharedData.connections[session]={code,name:player.name,avatar:player.avatar,accountId:player.accountId||null}; saveData(); socket.join(code); socket.data.room=code; socket.data.session=session;
     socket.emit('joined_room',{code,session}); socket.emit('chat_history',room.chat); systemChat(room,`${player.name} joined the room.`); broadcast(room);
   });
 
   socket.on('update_profile',payload=>{
     const room=getRoom(socket),p=getPlayer(room,socket); if(!room||!p)return;
-    p.name=clean(payload?.name,20)||p.name; p.avatar=safeAvatar(payload?.avatar); ensureConnections(); if(p.session) sharedData.connections[p.session]={code:room.code,name:p.name,avatar:p.avatar}; saveData(); broadcast(room);
+    p.name=clean(payload?.name,20)||p.name; p.avatar=safeAvatar(payload?.avatar); ensureConnections(); if(p.session) sharedData.connections[p.session]={code:room.code,name:p.name,avatar:p.avatar,accountId:p.accountId||null}; saveData(); broadcast(room);
     systemChat(room,`${p.name} updated their profile.`);
   });
   socket.on('set_ready',ready=>{const room=getRoom(socket),p=getPlayer(room,socket);if(!room||!p||room.phase!=='lobby')return;p.ready=!!ready;broadcast(room);});
@@ -317,16 +288,16 @@ io.on('connection',socket=>{
   socket.on('set_mode',mode=>{const room=getRoom(socket);if(!room||room.phase!=='lobby'||!['Classic','Chaos','Quick Play'].includes(mode))return;room.gameMode=mode;if(mode==='Quick Play')room.totalRounds=Math.min(room.totalRounds,3);broadcast(room);});
   socket.on('set_chat_enabled',enabled=>{const room=getRoom(socket);if(!room)return;room.chatEnabled=!!enabled;broadcast(room);systemChat(room,room.chatEnabled?'Chat enabled.':'Chat disabled.');});
 
-  socket.on('start_game',()=>{const room=getRoom(socket);if(!room)return;if(room.players.size!==2)return socket.emit('error_message','Both players need to join first.');room.round=0;room.dateNight=null;room.players.forEach(p=>{p.personalStreak=0;});startRound(room);});
-  socket.on('submit_answer',answer=>{const room=getRoom(socket),p=getPlayer(room,socket);if(!room||!p||room.phase!=='game'||p.answered)return;p.lastAnswer=clean(answer,300);p.answered=true;socket.emit('answer_saved',{streak:p.personalStreak,message:'Response saved — just your answer 💬'});broadcast(room);if([...room.players.values()].every(x=>x.answered))finishRound(room);});
+  socket.on('start_game',()=>{const room=getRoom(socket);if(!room)return;if(room.players.size!==2)return socket.emit('error_message','Both players need to join first.');room.round=0;room.dateNight=null;room.players.forEach(p=>{});startRound(room);});
+  socket.on('submit_answer',answer=>{const room=getRoom(socket),p=getPlayer(room,socket);if(!room||!p||room.phase!=='game'||p.answered)return;p.lastAnswer=clean(answer,300);p.answered=true;socket.emit('answer_saved',{saved:true,message:'Response saved.'});broadcast(room);if([...room.players.values()].every(x=>x.answered))finishRound(room);});
   socket.on('next_round',()=>{const room=getRoom(socket);if(!room||room.phase!=='results')return;if(room.round>=room.totalRounds){finishGame(room);return;}startRound(room);});
-  socket.on('rematch',()=>{const room=getRoom(socket);if(!room)return;room.phase='lobby';room.round=0;room.question='';room.dateNight=null;room.players.forEach(p=>{p.ready=false;p.personalStreak=0;p.answered=false;p.lastAnswer=null;});broadcast(room);systemChat(room,'Rematch ready — both players can ready up again.');});
+  socket.on('rematch',()=>{const room=getRoom(socket);if(!room)return;room.phase='lobby';room.round=0;room.question='';room.dateNight=null;room.players.forEach(p=>{p.ready=false;p.answered=false;p.lastAnswer=null;});broadcast(room);systemChat(room,'Rematch ready — both players can ready up again.');});
   socket.on('date_night',()=>{const room=getRoom(socket);if(!room)return;room.dateNight=DATE_NIGHTS[Math.floor(Math.random()*DATE_NIGHTS.length)];broadcast(room);systemChat(room,`Date Night pick: ${room.dateNight.title}`);io.to(room.code).emit('date_night_pick',room.dateNight);});
   socket.on('chat',text=>{const room=getRoom(socket),p=getPlayer(room,socket);if(!room||!p||!room.chatEnabled)return;const message=clean(text,300);if(!message)return;const now=Date.now();if(now-p.lastChat<700)return;p.lastChat=now;const msg={id:socket.id,name:p.name,avatar:p.avatar,text:message,time:now};room.chat.push(msg);if(room.chat.length>150)room.chat.shift();io.to(room.code).emit('chat',msg);io.to(room.code).emit('typing',null);});
   socket.on('draw_stroke',d=>{const room=getRoom(socket),p=getPlayer(room,socket);if(!room||!p||room.phase!=='game')return;socket.to(room.code).emit('draw_stroke',{from:Array.isArray(d?.from)?d.from.slice(0,2):[0,0],to:Array.isArray(d?.to)?d.to.slice(0,2):[0,0]});});
   socket.on('draw_clear',()=>{const room=getRoom(socket);if(room&&room.phase==='game')socket.to(room.code).emit('draw_clear');});
   socket.on('typing',isTyping=>{const room=getRoom(socket),p=getPlayer(room,socket);if(!room||!p||!room.chatEnabled)return;socket.to(room.code).emit('typing',isTyping?p.name:null);});
-  socket.on('disconnect',()=>{const room=getRoom(socket);if(!room)return;const p=room.players.get(socket.id);room.players.delete(socket.id);if(p)systemChat(room,`${p.name} left the room.`);if(p?.session) room.sessions.set(p.session,{...p,id:null}); saveRoom(room); if(room.players.size>0){room.phase='lobby';room.round=0;room.question='';room.players.forEach(x=>{x.ready=false;x.personalStreak=0;x.answered=false;});broadcast(room);} else { room.phase='lobby'; room.round=0; saveData(); }});
+  socket.on('disconnect',()=>{const room=getRoom(socket);if(!room)return;const p=room.players.get(socket.id);room.players.delete(socket.id);if(p)systemChat(room,`${p.name} left the room.`);if(p?.session) room.sessions.set(p.session,{...p,id:null}); saveRoom(room); if(room.players.size>0){room.phase='lobby';room.round=0;room.question='';room.players.forEach(x=>{x.ready=false;x.answered=false;});broadcast(room);} else { room.phase='lobby'; room.round=0; saveData(); }});
 });
 
 const PORT=process.env.PORT||3000;
