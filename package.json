@@ -1,6 +1,6 @@
 {
   "name": "game-night",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Game Night - private two-player real-time game app",
   "main": "server.js",
@@ -8,8 +8,8 @@
     "start": "node server.js"
   },
   "dependencies": {
-  "express": "^4.21.2",
-  "socket.io": "^4.8.1",
-  "google-auth-library": "^10.4.0"
-}
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1",
+    "google-auth-library": "^9.14.1"
+  }
 }
