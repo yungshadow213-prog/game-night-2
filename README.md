@@ -1,4 +1,4 @@
-[README.md](https://github.com/user-attachments/files/32028960/README.md)
+[README.md](https://github.com/user-attachments/files/32029375/README.md)
 # Game Night — polished redesign build
 
 This build keeps the existing private two-player Socket.IO backend and upgrades the interface into a polished app-style dashboard.
@@ -24,3 +24,7 @@ This build keeps the existing private two-player Socket.IO backend and upgrades 
 4. Open the local address shown by the server.
 
 The app is still designed for exactly two connected players.
+
+
+## Google authentication
+Set the Render environment variable `GOOGLE_CLIENT_ID` to your Google OAuth Web client ID. The app exposes `/api/config` and verifies Google ID tokens server-side before creating an account session. Add your production and localhost JavaScript origins in Google Cloud.
