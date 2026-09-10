@@ -1,30 +1,21 @@
-[README.md](https://github.com/user-attachments/files/32029375/README.md)
-# Game Night — polished redesign build
+[Uploading README.md…]()
+# Game Night 3.0
 
-This build keeps the existing private two-player Socket.IO backend and upgrades the interface into a polished app-style dashboard.
+Main 3.0 build, bug-fixed for local multiplayer testing.
 
-## Included
-- Dark Game Night base with pink/purple neon accents
-- Per-player accent color picker
-- Profile editing and avatar picker
-- Dashboard-style Home
-- Games library with 15 game cards
-- Date Night section for long-distance activities
-- Music Room with compatible YouTube embedding
-- Stats, Love Calculator, Streak and Settings screens
-- Persistent mini music-player UI
-- Private room and real-time chat/game flow preserved
-- Responsive desktop/mobile layouts
-- PWA manifest + service worker
+Key fixes in this maintenance build:
+- Reliable Socket.IO connection/resume flow
+- Private room create/join acknowledgements
+- Chat room history hydration without UI blinking
+- Stable navigation during live state broadcasts
+- Game selection/start acknowledgements
+- Preserved 10-game question banks
+- Profile customization persistence
+- PWA cache/version refresh
 
-## Run
-1. Open Command Prompt in this folder.
-2. Run `npm install` once.
-3. Run `npm start`.
-4. Open the local address shown by the server.
-
-The app is still designed for exactly two connected players.
-
-
-## Google authentication
-Set the Render environment variable `GOOGLE_CLIENT_ID` to your Google OAuth Web client ID. The app exposes `/api/config` and verifies Google ID tokens server-side before creating an account session. Add your production and localhost JavaScript origins in Google Cloud.
+Run:
+```
+npm install
+npm start
+```
+Then open http://localhost:3000.
