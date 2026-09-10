@@ -1,0 +1,98 @@
+{
+  "accounts": {},
+  "accountSessions": {},
+  "connections": {
+    "7eb1cf7c-7302-4c54-ae7e-905c6d3a6eec": {
+      "code": "HK5T6",
+      "playerId": "dd7af087-cf3a-419b-a16d-33a4e081f327",
+      "accountId": null
+    },
+    "96f7602a-2ef9-44e3-b66f-056f83545bb3": {
+      "code": "HK5T6",
+      "playerId": "58d9444b-61c7-4b8c-bd2c-10e52e0a137b",
+      "accountId": null
+    }
+  },
+  "rooms": {
+    "HK5T6": {
+      "code": "HK5T6",
+      "phase": "lobby",
+      "category": "Guess My Answer",
+      "round": 0,
+      "totalRounds": 7,
+      "gameMode": "Chaos",
+      "chatEnabled": true,
+      "chat": [
+        {
+          "id": "system-1789071123069",
+          "system": true,
+          "text": "dee connected.",
+          "time": 1789071123069
+        },
+        {
+          "id": "z4yS0gkmq0DXG5TIAAAA-1789071141971",
+          "name": "dee",
+          "avatar": "🌙",
+          "text": "hey bshid",
+          "time": 1789071141971
+        }
+      ],
+      "musicUrl": "",
+      "musicPlaying": false,
+      "musicPosition": 0,
+      "musicOwnerId": null,
+      "dateNight": null,
+      "gamesPlayed": 0,
+      "streak": 0,
+      "bestStreak": 0,
+      "nights": 0,
+      "lastCompletedDay": null,
+      "hostPlayerId": "dd7af087-cf3a-419b-a16d-33a4e081f327",
+      "roundStage": "idle",
+      "actorId": "dd7af087-cf3a-419b-a16d-33a4e081f327",
+      "predictorId": "58d9444b-61c7-4b8c-bd2c-10e52e0a137b",
+      "prompt": "What would I pick for a perfect evening together?",
+      "hiddenPrompt": "",
+      "answers": {},
+      "meta": {},
+      "members": [
+        {
+          "id": null,
+          "playerId": "dd7af087-cf3a-419b-a16d-33a4e081f327",
+          "session": "7eb1cf7c-7302-4c54-ae7e-905c6d3a6eec",
+          "accountId": null,
+          "name": "dee",
+          "avatar": "🌙",
+          "accent": "#72a7ff",
+          "accent2": "#c17cff",
+          "bio": "",
+          "wallpaper": "midnight",
+          "glow": "soft",
+          "density": "cozy",
+          "motion": "smooth",
+          "contrast": "balanced",
+          "ready": false,
+          "host": true
+        },
+        {
+          "id": null,
+          "playerId": "58d9444b-61c7-4b8c-bd2c-10e52e0a137b",
+          "session": "96f7602a-2ef9-44e3-b66f-056f83545bb3",
+          "accountId": null,
+          "name": "dee",
+          "avatar": "🌙",
+          "accent": "#72a7ff",
+          "accent2": "#c17cff",
+          "bio": "",
+          "wallpaper": "midnight",
+          "glow": "soft",
+          "density": "cozy",
+          "motion": "smooth",
+          "contrast": "balanced",
+          "ready": false,
+          "host": false
+        }
+      ]
+    }
+  }
+}
