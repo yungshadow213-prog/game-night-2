@@ -1,42 +1,36 @@
-const express = require('express');
-const http = require('http');
-const path = require('path');
-const fs = require('fs');
-const { Server } = require('socket.io');
-const { OAuth2Client } = require('google-auth-library');
-const crypto = require('crypto');
-
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: true, credentials: true } });
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.json({limit:'1mb'}));
+const express=require('express');
+const http=require('http');
+const path=require('path');
+const fs=require('fs');
+const crypto=require('crypto');
+const {Server}=require('socket.io');
+const {OAuth2Client}=require('google-auth-library');
+const APP_VERSION='3.0.1';
+const app=express();
+const server=http.createServer(app);
+const io=new Server(server,{cors:{origin:true,credentials:true},maxHttpBufferSize:3e6});
+app.use(express.json({limit:'4mb'}));
+app.use(express.static(path.join(__dirname,'public')));
+const DATA_FILE=path.join(__dirname,'gamenight-data.json');
+let data={accounts:{},accountSessions:{},connections:{},rooms:{}};
+try{data=JSON.parse(fs.readFileSync(DATA_FILE,'utf8'))}catch{}
+data.accounts ||= {}; data.accountSessions ||= {}; data.connections ||= {}; data.rooms ||= {};
+function saveData(){try{fs.writeFileSync(DATA_FILE,JSON.stringify(data,null,2))}catch{}}
+function clean(v,n=160){return String(v??'').replace(/[<>]/g,'').trim().slice(0,n)}
+function token(){return crypto.randomBytes(24).toString('hex')}
+function dayKey(){return new Date().toISOString().slice(0,10)}
 const GOOGLE_CLIENT_ID=process.env.GOOGLE_CLIENT_ID||'';
 const googleClient=GOOGLE_CLIENT_ID?new OAuth2Client(GOOGLE_CLIENT_ID):null;
-app.get('/api/config',(req,res)=>res.json({googleClientId:GOOGLE_CLIENT_ID}));
-app.post('/api/auth/google',async(req,res)=>{
-  try{
-    if(!googleClient)return res.status(503).json({error:'Google sign-in is not configured.'});
-    const ticket=await googleClient.verifyIdToken({idToken:String(req.body?.credential||''),audience:GOOGLE_CLIENT_ID});
-    const p=ticket.getPayload(); if(!p?.sub)return res.status(401).json({error:'Invalid Google credential.'});
-    sharedData.accounts ||= {};
-    let account=sharedData.accounts[p.sub]||{id:crypto.randomUUID(),provider:'google',googleSub:p.sub,name:clean(p.name,20)||'Player',email:clean(p.email,120),picture:String(p.picture||'').slice(0,1000),createdAt:Date.now()};
-    account.name=clean(account.name||p.name||'Player',20)||'Player'; account.email=clean(account.email||p.email||'',120); account.picture=String(account.picture||p.picture||'').slice(0,1000); account.updatedAt=Date.now(); account.session=token(); sharedData.accounts[p.sub]=account; sharedData.accountSessions ||= {}; sharedData.accountSessions[account.session]=account.id; saveData();
-    res.json({account:{id:account.id,name:account.name,email:account.email,picture:account.picture,authenticated:true,session:account.session}});
-  }catch(e){res.status(401).json({error:'Google credential verification failed.'});}
-});
-
-const rooms = new Map();
-const DATA_FILE = path.join(__dirname, 'gamenight-data.json');
-let sharedData = {};
-try { sharedData = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch { sharedData = {}; }
-function saveData(){ try { fs.writeFileSync(DATA_FILE, JSON.stringify(sharedData, null, 2)); } catch {} }
-function token(){ return require('crypto').randomBytes(18).toString('hex'); }
-function ensureConnections(){ if(!sharedData.connections) sharedData.connections={}; }
-function accountForPayload(payload){ const id=clean(payload?.accountId,100); const a=id?Object.values(sharedData.accounts||{}).find(x=>x.id===id):null; return a||null; }
-ensureConnections(); if(!sharedData.accounts)sharedData.accounts={}; if(!sharedData.accountSessions)sharedData.accountSessions={};
-
-const AVATARS = ['🌙','✨','🦋','🐈','🐼','🦊','🐰','🐻','🐱','🌸','⭐','🍓','🎀','🩷','🖤','🌌'];
+app.get('/api/config',(req,res)=>res.json({version:APP_VERSION,googleClientId:GOOGLE_CLIENT_ID,pwa:true}));
+app.post('/api/auth/google',async(req,res)=>{try{
+ if(!googleClient)return res.status(503).json({error:'Google sign-in is not configured on this deployment.'});
+ const ticket=await googleClient.verifyIdToken({idToken:String(req.body?.credential||''),audience:GOOGLE_CLIENT_ID});
+ const p=ticket.getPayload(); if(!p?.sub)return res.status(401).json({error:'Invalid Google credential.'});
+ let account=data.accounts[p.sub]||{id:crypto.randomUUID(),googleSub:p.sub,provider:'google',createdAt:Date.now()};
+ account.name=clean(account.name||p.name||'Player',24)||'Player'; account.email=clean(account.email||p.email||'',160); account.picture=clean(account.picture||p.picture||'',1200); account.updatedAt=Date.now(); account.session=token();
+ data.accounts[p.sub]=account; data.accountSessions[account.session]=account.id; saveData();
+ res.json({account:{id:account.id,name:account.name,email:account.email,picture:account.picture,session:account.session,authenticated:true}});
+}catch(e){res.status(401).json({error:'Google credential verification failed.'})}});
 const QUESTIONS = {
   "Would You Rather": [
     "Would you rather plan a cozy night or let the other person surprise you?",
@@ -179,126 +173,72 @@ const QUESTIONS = {
     "Teasing round: choose who gets the “most dramatic” card."
   ]
 };
-const DATE_NIGHTS = [
-  {title:'Cozy Movie Night', desc:'Pick a movie, grab snacks, and rate it together.'},
-  {title:'Anime Night', desc:'Each person picks one episode. Then compare ratings.'},
-  {title:'Music Swap', desc:'Take turns choosing songs and explain why you picked them.'},
-  {title:'Question Roulette', desc:'Play 10 random questions from your favorite categories.'},
-  {title:'Compliment Challenge', desc:'Give each other three genuine compliments, no repeats.'},
-  {title:'Drawing Duel', desc:'Choose a silly prompt and draw for five minutes.'},
-  {title:'Memory Lane', desc:'Take turns sharing favorite memories and funny moments.'},
-  {title:'Two Truths & A Lie', desc:'Three statements each. Guess the lie.'},
-  {title:'No-Plan Night', desc:'Flip a coin for every tiny decision and see where the night goes.'}
+const DATE_NIGHTS=[
+ {title:'Cozy Movie Night',desc:'Pick a movie, grab snacks, and rate it together.',ico:'🎬'},
+ {title:'Anime Night',desc:'Each person picks one episode. Then compare ratings.',ico:'🍿'},
+ {title:'Music Swap',desc:'Take turns choosing songs and explain why you picked them.',ico:'🎵'},
+ {title:'Question Roulette',desc:'Play random questions from your favorite categories.',ico:'🎲'},
+ {title:'Compliment Challenge',desc:'Give each other three genuine compliments, no repeats.',ico:'💖'},
+ {title:'Draw & Guess — Live',desc:'Take turns drawing and guessing a silly prompt together.',ico:'🎨'},
+ {title:'Memory Lane',desc:'Take turns sharing favorite memories and funny moments.',ico:'🫶'},
+ {title:'Two Truths & A Lie',desc:'Three statements each. Guess the lie.',ico:'🎭'},
+ {title:'No-Plan Night',desc:'Flip a coin for every tiny decision and see where the night goes.',ico:'🪩'}
 ];
-
-const clean = (v,n=100)=>String(v??'').replace(/[<>]/g,'').trim().slice(0,n);
-const safeAvatar = v=>{const x=String(v||'');if(AVATARS.includes(x))return x;if(/^data:image\/(png|jpeg|webp);base64,/i.test(x)&&x.length<=2800000)return x;return '🌙';};
-const makeCode=()=>Math.random().toString(36).slice(2,7).toUpperCase();
-const dayKey=()=>new Date().toISOString().slice(0,10);
-
-function roomStats(room){ return { games:room.gamesPlayed, streak:room.streak, bestStreak:room.bestStreak }; }
-function publicState(room){
-  return {
-    code:room.code,
-    players:[...room.players.values()].map(p=>({id:p.id,name:p.name,avatar:p.avatar,ready:p.ready,answered:p.answered,accountId:p.accountId})),
-    phase:room.phase, round:room.round, totalRounds:room.totalRounds,
-    category:room.category, question:room.question, music:room.music,
-    gameMode:room.gameMode, chatEnabled:room.chatEnabled,
-    dateNight:room.dateNight, stats:roomStats(room)
-  };
-}
-function broadcast(room){ io.to(room.code).emit('state', publicState(room)); }
-function getRoom(socket){ return rooms.get(socket.data.room); }
-function getPlayer(room,socket){ return room?.players.get(socket.id); }
-function systemChat(room,text){
-  const msg={system:true,text,time:Date.now()}; room.chat.push(msg); if(room.chat.length>150)room.chat.shift(); io.to(room.code).emit('chat',msg);
-}
-function chooseQuestion(room){
-  const list=QUESTIONS[room.category]||QUESTIONS['Would You Rather'];
-  return list[(room.round-1)%list.length];
-}
-function startRound(room){
-  room.phase='game'; room.round++; room.question=chooseQuestion(room);
-  room.players.forEach(p=>{p.answered=false;p.lastAnswer=null;});
-  broadcast(room); io.to(room.code).emit('round_started',{round:room.round,totalRounds:room.totalRounds,question:room.question,category:room.category});
-}
-function finishRound(room){
-  room.phase='results';
-  const answers=Object.fromEntries([...room.players.values()].map(p=>[p.id,p.lastAnswer]));
-  broadcast(room); io.to(room.code).emit('round_results',{round:room.round,answers});
-}
-function finishGame(room){
-  room.phase='finished'; room.gamesPlayed++;
-  const k=dayKey();
-  if(room.lastCompletedDay!==k){
-    const y=new Date(Date.now()-86400000).toISOString().slice(0,10);
-    room.streak = room.lastCompletedDay===y ? room.streak+1 : 1;
-    room.bestStreak=Math.max(room.bestStreak,room.streak); room.lastCompletedDay=k;
-  }
-  
-  saveData(); broadcast(room);
-  io.to(room.code).emit('game_finished',{stats:roomStats(room),players:[...room.players.values()].map(p=>({id:p.id,name:p.name,avatar:p.avatar}))});
-}
-function loadShared(room){
-  const d=sharedData[room.code]; if(!d)return;
-  Object.assign(room,{gamesPlayed:d.gamesPlayed||0,streak:d.streak||0,bestStreak:d.bestStreak||0,lastCompletedDay:d.lastCompletedDay||null});
-}
-function saveRoom(room){
-  sharedData[room.code]={gamesPlayed:room.gamesPlayed,streak:room.streak,bestStreak:room.bestStreak,lastCompletedDay:room.lastCompletedDay}; saveData();
-}
-
+const AVATARS=['🌙','✨','🦋','🐈','🐼','🦊','🐰','🐻','🐱','🌸','⭐','🍓','🎀','🩷','🖤','🌌','🌊','☁️','🌺','🪐','🍒','🪽','🐧','🦄'];
+const GAMES={"Would You Rather": ["❓", "wyr", "Both answer freely. Chat, compare, then move on."], "How Well Do You Know Me?": ["🧠", "know", "One player answers privately; the other predicts."], "Guess My Answer": ["💭", "guess", "Predict what your partner would really choose."], "Truth or Dare": ["💗", "tod", "Take turns choosing Truth or Dare, then respond."], "Flirty / Teasing": ["✨", "flirty", "Playful, bold, wholesome prompts. Respond your own way."], "Draw & Guess — Live": ["🎨", "draw", "One draws live while the other guesses."], "Two Truths & A Lie": ["🎭", "two", "Three statements. Spot the lie."], "Reaction Race": ["⚡", "react", "React fast to the prompt—just for fun."], "Guess The Vibe": ["🌈", "vibe", "Predict the vibe, reveal the real vibe, talk."], "Card Flip": ["🃏", "card", "Flip a prompt card and play it out."]};
+const rooms=new Map();
+const MAX_CUSTOM_IMAGE=2800000;
+function safeAvatar(v){const x=String(v||''); if(AVATARS.includes(x))return x; if(/^data:image\/(png|jpeg|webp|gif);base64,/i.test(x)&&x.length<=MAX_CUSTOM_IMAGE)return x; if(/^https:\/\/[-A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%]+$/.test(x)&&x.length<=1200)return x; return '🌙';}
+function makeCode(){let c;do{c=Math.random().toString(36).slice(2,7).toUpperCase()}while(rooms.has(c));return c}
+const COLOR_RE=/^#[0-9a-f]{6}$/i;const WALLPAPER_SET=new Set(['midnight','nebula','aurora','velvet','ocean','sunset']);const GLOW_SET=new Set(['soft','bright','max']);const DENSITY_SET=new Set(['cozy','compact']);const MOTION_SET=new Set(['smooth','calm','reduced']);const CONTRAST_SET=new Set(['balanced','crisp','soft']);function safeColor(v,fallback){const x=String(v||'');return COLOR_RE.test(x)?x:fallback}
+function publicPlayer(p){return {id:p.id,playerId:p.playerId,name:p.name,avatar:p.avatar,accent:p.accent||'#72a7ff',bio:p.bio||'',wallpaper:p.wallpaper||'midnight',ready:!!p.ready,host:!!p.host,online:!!p.id,accountId:p.accountId||null}}
+function publicState(room){return {version:APP_VERSION,code:room.code,phase:room.phase,category:room.category,round:room.round,totalRounds:room.totalRounds,gameMode:room.gameMode,chatEnabled:room.chatEnabled,chat:room.chat.slice(-200),musicUrl:room.musicUrl,musicPlaying:room.musicPlaying,musicPosition:room.musicPosition,musicOwnerId:room.musicOwnerId,dateNight:room.dateNight,stats:{games:room.gamesPlayed,streak:room.streak,bestStreak:room.bestStreak,nights:room.nights},players:[...room.members.values()].map(publicPlayer),roundStage:room.roundStage,actorId:room.actorId,predictorId:room.predictorId,prompt:room.prompt,hiddenPrompt:room.hiddenPrompt}}
+function getRoom(s){return rooms.get(s.data.room)||null}
+function me(room,s){return room?.players.get(s.id)||null}
+function other(room,pid){return [...room.players.values()].find(p=>p.playerId!==pid)||null}
+function createRoom(code){const room={code,players:new Map(),members:new Map(),phase:'lobby',category:'Would You Rather',round:0,totalRounds:5,gameMode:'Classic',chatEnabled:true,chat:[],musicUrl:'',musicPlaying:false,musicPosition:0,musicOwnerId:null,dateNight:null,gamesPlayed:0,hostPlayerId:null,streak:0,bestStreak:0,nights:0,lastCompletedDay:null,roundStage:'idle',actorId:null,predictorId:null,prompt:'',hiddenPrompt:'',answers:{},meta:{}};rooms.set(code,room);saveRoom(room);return room}
+function serializeRoom(room){return {code:room.code,phase:room.phase,category:room.category,round:room.round,totalRounds:room.totalRounds,gameMode:room.gameMode,chatEnabled:room.chatEnabled,chat:room.chat.slice(-200),musicUrl:room.musicUrl,musicPlaying:room.musicPlaying,musicPosition:room.musicPosition,musicOwnerId:room.musicOwnerId,dateNight:room.dateNight,gamesPlayed:room.gamesPlayed,streak:room.streak,bestStreak:room.bestStreak,nights:room.nights,lastCompletedDay:room.lastCompletedDay,hostPlayerId:room.hostPlayerId,roundStage:room.roundStage,actorId:room.actorId,predictorId:room.predictorId,prompt:room.prompt,hiddenPrompt:room.hiddenPrompt,answers:room.answers,meta:room.meta,members:[...room.members.values()].map(p=>({...p,id:null,ready:false}))}}
+function saveRoom(room){data.rooms[room.code]=serializeRoom(room);saveData()}
+function loadRoom(code){const raw=data.rooms?.[code];if(!raw)return null;const room={...raw,players:new Map(),members:new Map(),chat:Array.isArray(raw.chat)?raw.chat:[],answers:raw.answers||{},meta:raw.meta||{}};(raw.members||[]).forEach(p=>room.members.set(p.playerId,{...p,id:null,ready:false,host:!!p.host})); if(!room.hostPlayerId){const first=[...room.members.values()][0];room.hostPlayerId=first?.playerId||null;if(first)first.host=true;} else {room.members.forEach(m=>{m.host=m.playerId===room.hostPlayerId})} rooms.set(code,room);return room}
+function addPlayer(socket,payload,room){const isFirst=room.members.size===0;const p={id:socket.id,playerId:crypto.randomUUID(),session:clean(payload?.session,100)||token(),accountId:clean(payload?.accountId,100)||null,name:clean(payload?.name,24)||'Player',avatar:safeAvatar(payload?.avatar),accent:safeColor(payload?.accent,'#72a7ff'),accent2:safeColor(payload?.accent2,'#c17cff'),bio:clean(payload?.bio,120)||'',wallpaper:WALLPAPER_SET.has(String(payload?.wallpaper||''))?String(payload.wallpaper):'midnight',glow:GLOW_SET.has(String(payload?.glow||''))?String(payload.glow):'soft',density:DENSITY_SET.has(String(payload?.density||''))?String(payload.density):'cozy',motion:MOTION_SET.has(String(payload?.motion||''))?String(payload.motion):'reduced',contrast:CONTRAST_SET.has(String(payload?.contrast||''))?String(payload.contrast):'balanced',ready:false,host:isFirst}; if(isFirst)room.hostPlayerId=p.playerId; room.players.set(socket.id,p);room.members.set(p.playerId,p); socket.data.room=room.code; socket.data.playerId=p.playerId; socket.data.session=p.session; socket.join(room.code); data.connections[p.session]={code:room.code,playerId:p.playerId,accountId:p.accountId||null}; saveData(); socket.emit('session_ready',p.session); return p}
+function promptFor(room){const list=QUESTIONS[room.category]||[];return list[(room.round-1)%Math.max(list.length,1)]||'Make your own prompt.'}
+function startRound(room){room.phase='game';room.round++;room.answers={};room.meta={};room.prompt=promptFor(room);room.hiddenPrompt='';room.roundStage='open';
+ const ps=[...room.players.values()]; const actor=ps[(room.round-1)%2]; const predictor=ps.find(p=>p!==actor); room.actorId=actor?.playerId||null; room.predictorId=predictor?.playerId||null;
+ if(room.category==='Would You Rather'||room.category==='Flirty / Teasing'||room.category==='Reaction Race')room.roundStage='both'; else room.roundStage='actor';
+ io.to(room.code).emit('round_started',{state:publicState(room)}); broadcast(room)}
+function broadcast(room){saveRoom(room);io.to(room.code).emit('state',publicState(room))}
+function systemChat(room,text){const msg={id:'system-'+Date.now(),system:true,text,time:Date.now()};room.chat.push(msg);io.to(room.code).emit('chat',msg)}
+function finishRound(room,extra={}){room.phase='results';room.roundStage='complete';io.to(room.code).emit('round_results',{state:publicState(room),answers:room.answers,...extra}) ;broadcast(room)}
+function recordCompletion(room){room.gamesPlayed+=1;room.nights+=1;const d=dayKey();if(room.lastCompletedDay!==d){room.streak+=1;room.bestStreak=Math.max(room.bestStreak,room.streak);room.lastCompletedDay=d}}
+function decode(v){try{return JSON.parse(v)}catch{return v}}
 io.on('connection',socket=>{
-  socket.on('resume_session',session=>{
-    ensureConnections(); const rec=sharedData.connections?.[clean(session,80)]; if(!rec)return socket.emit('resume_failed');
-    let room=rooms.get(rec.code);
-    if(!room){ room={code:rec.code,players:new Map(),sessions:new Map(),phase:'lobby',round:0,totalRounds:5,category:'Would You Rather',question:'',music:'romantic',chatEnabled:true,chat:[],gameMode:'Classic',dateNight:null,createdAt:Date.now(),gamesPlayed:0,streak:0,bestStreak:0,lastCompletedDay:null}; loadShared(room); rooms.set(room.code,room); }
-    if(room.players.size>=2)return socket.emit('resume_failed');
-    const old=room.sessions.get(session)||{}; const acct=(sharedData.accounts&&rec.accountId)?Object.values(sharedData.accounts).find(a=>a.id===rec.accountId):null; const player={...old,id:socket.id,session,accountId:rec.accountId||old.accountId||null,name:acct?.name||rec.name||old.name||'Player',avatar:rec.avatar||old.avatar||'🌙',ready:false,answered:false,lastAnswer:null,lastChat:0};
-    room.players.set(socket.id,player); room.sessions.set(session,player); socket.join(room.code); socket.data.room=room.code; socket.data.session=session;
-    socket.emit('resumed',{code:room.code,session}); socket.emit('chat_history',room.chat); broadcast(room);
-  });
-  socket.on('create_room',payload=>{
-    let code; do{code=makeCode();}while(rooms.has(code));
-    const room={code,players:new Map(),sessions:new Map(),phase:'lobby',round:0,totalRounds:5,category:'Would You Rather',question:'',music:'romantic',chatEnabled:true,chat:[],gameMode:'Classic',dateNight:null,createdAt:Date.now(),gamesPlayed:0,streak:0,bestStreak:0,lastCompletedDay:null};
-    loadShared(room);
-    const acct=accountForPayload(payload); const session=acct?.session||token(); const player={id:socket.id,session,accountId:acct?.id||null,name:clean(acct?.name||payload?.name,20)||'Player',avatar:safeAvatar(payload?.avatar)||acct?.picture||'🌙',ready:false,answered:false,lastAnswer:null,lastChat:0};
-    room.players.set(socket.id,player); rooms.set(code,room); room.sessions.set(session,player); sharedData.connections[session]={code,name:player.name,avatar:player.avatar,accountId:player.accountId||null}; saveData(); socket.join(code); socket.data.room=code; socket.data.session=session;
-    socket.emit('room_created',{code,session}); socket.emit('chat_history',room.chat); broadcast(room);
-  });
-
-  socket.on('join_room',payload=>{
-    const code=clean(payload?.code,10).toUpperCase(),room=rooms.get(code);
-    if(!room)return socket.emit('error_message','Room not found.');
-    if(room.players.size>=2)return socket.emit('error_message','This private room already has two players.');
-    if(room.phase!=='lobby')return socket.emit('error_message','The game has already started.');
-    const acct=accountForPayload(payload); const session=clean(payload?.session,80)||acct?.session||token(); const player={id:socket.id,session,accountId:acct?.id||null,name:clean(acct?.name||payload?.name,20)||'Player',avatar:safeAvatar(payload?.avatar)||acct?.picture||'🌙',ready:false,answered:false,lastAnswer:null,lastChat:0};
-    room.players.set(socket.id,player); room.sessions.set(session,player); sharedData.connections[session]={code,name:player.name,avatar:player.avatar,accountId:player.accountId||null}; saveData(); socket.join(code); socket.data.room=code; socket.data.session=session;
-    socket.emit('joined_room',{code,session}); socket.emit('chat_history',room.chat); systemChat(room,`${player.name} joined the room.`); broadcast(room);
-  });
-
-  socket.on('update_profile',payload=>{
-    const room=getRoom(socket),p=getPlayer(room,socket); if(!room||!p)return;
-    p.name=clean(payload?.name,20)||p.name; p.avatar=safeAvatar(payload?.avatar); ensureConnections(); if(p.session) sharedData.connections[p.session]={code:room.code,name:p.name,avatar:p.avatar,accountId:p.accountId||null}; saveData(); broadcast(room);
-    systemChat(room,`${p.name} updated their profile.`);
-  });
-  socket.on('set_ready',ready=>{const room=getRoom(socket),p=getPlayer(room,socket);if(!room||!p||room.phase!=='lobby')return;p.ready=!!ready;broadcast(room);});
-  socket.on('set_rounds',n=>{const room=getRoom(socket);if(!room||room.phase!=='lobby')return;room.totalRounds=Math.max(3,Math.min(10,Number(n)||5));broadcast(room);});
-  socket.on('set_category',cat=>{const room=getRoom(socket);if(!room||room.phase!=='lobby'||!QUESTIONS[cat])return;room.category=cat;broadcast(room);});
-  socket.on('set_music',music=>{const room=getRoom(socket);if(!room||!['romantic','phonk','off'].includes(music))return;room.music=music;broadcast(room);});
-  socket.on('set_mode',mode=>{const room=getRoom(socket);if(!room||room.phase!=='lobby'||!['Classic','Chaos','Quick Play'].includes(mode))return;room.gameMode=mode;if(mode==='Quick Play')room.totalRounds=Math.min(room.totalRounds,3);broadcast(room);});
-  socket.on('set_chat_enabled',enabled=>{const room=getRoom(socket);if(!room)return;room.chatEnabled=!!enabled;broadcast(room);systemChat(room,room.chatEnabled?'Chat enabled.':'Chat disabled.');});
-
-  socket.on('start_game',()=>{const room=getRoom(socket);if(!room)return;if(room.players.size!==2)return socket.emit('error_message','Both players need to join first.');room.round=0;room.dateNight=null;room.players.forEach(p=>{});startRound(room);});
-  socket.on('submit_answer',answer=>{const room=getRoom(socket),p=getPlayer(room,socket);if(!room||!p||room.phase!=='game'||p.answered)return;p.lastAnswer=clean(answer,300);p.answered=true;socket.emit('answer_saved',{saved:true,message:'Response saved.'});broadcast(room);if([...room.players.values()].every(x=>x.answered))finishRound(room);});
-  socket.on('next_round',()=>{const room=getRoom(socket);if(!room||room.phase!=='results')return;if(room.round>=room.totalRounds){finishGame(room);return;}startRound(room);});
-  socket.on('rematch',()=>{const room=getRoom(socket);if(!room)return;room.phase='lobby';room.round=0;room.question='';room.dateNight=null;room.players.forEach(p=>{p.ready=false;p.answered=false;p.lastAnswer=null;});broadcast(room);systemChat(room,'Rematch ready — both players can ready up again.');});
-  socket.on('date_night',()=>{const room=getRoom(socket);if(!room)return;room.dateNight=DATE_NIGHTS[Math.floor(Math.random()*DATE_NIGHTS.length)];broadcast(room);systemChat(room,`Date Night pick: ${room.dateNight.title}`);io.to(room.code).emit('date_night_pick',room.dateNight);});
-  socket.on('chat',text=>{const room=getRoom(socket),p=getPlayer(room,socket);if(!room||!p||!room.chatEnabled)return;const message=clean(text,300);if(!message)return;const now=Date.now();if(now-p.lastChat<700)return;p.lastChat=now;const msg={id:socket.id,name:p.name,avatar:p.avatar,text:message,time:now};room.chat.push(msg);if(room.chat.length>150)room.chat.shift();io.to(room.code).emit('chat',msg);io.to(room.code).emit('typing',null);});
-  socket.on('draw_stroke',d=>{const room=getRoom(socket),p=getPlayer(room,socket);if(!room||!p||room.phase!=='game')return;socket.to(room.code).emit('draw_stroke',{from:Array.isArray(d?.from)?d.from.slice(0,2):[0,0],to:Array.isArray(d?.to)?d.to.slice(0,2):[0,0]});});
-  socket.on('draw_clear',()=>{const room=getRoom(socket);if(room&&room.phase==='game')socket.to(room.code).emit('draw_clear');});
-  socket.on('typing',isTyping=>{const room=getRoom(socket),p=getPlayer(room,socket);if(!room||!p||!room.chatEnabled)return;socket.to(room.code).emit('typing',isTyping?p.name:null);});
-  socket.on('disconnect',()=>{const room=getRoom(socket);if(!room)return;const p=room.players.get(socket.id);room.players.delete(socket.id);if(p)systemChat(room,`${p.name} left the room.`);if(p?.session) room.sessions.set(p.session,{...p,id:null}); saveRoom(room); if(room.players.size>0){room.phase='lobby';room.round=0;room.question='';room.players.forEach(x=>{x.ready=false;x.answered=false;});broadcast(room);} else { room.phase='lobby'; room.round=0; saveData(); }});
+ socket.on('resume_session',session=>{const rec=data.connections?.[clean(session,100)];if(!rec)return socket.emit('resume_failed');let room=rooms.get(rec.code)||loadRoom(rec.code);if(!room)return socket.emit('resume_failed');const saved=room.members.get(rec.playerId);if(!saved)return socket.emit('resume_failed');const oldSocketId=saved.id; if(oldSocketId && oldSocketId!==socket.id) room.players.delete(oldSocketId); saved.id=socket.id; saved.session=clean(session,100); room.players.set(socket.id,saved); socket.data.room=room.code; socket.data.playerId=saved.playerId; socket.data.session=saved.session; socket.join(room.code); broadcast(room); socket.emit('resume_ok',publicState(room))});
+ socket.on('create_room',(payload,ack)=>{try{const room=createRoom(makeCode());addPlayer(socket,payload,room);broadcast(room);if(typeof ack==='function')ack(true,'Room created')}catch(e){if(typeof ack==='function')ack(false,'Could not create the private room')}});
+ socket.on('join_room',(payload,ack)=>{try{const code=clean(payload?.code,8).toUpperCase();const room=rooms.get(code)||loadRoom(code);if(!room){if(typeof ack==='function')ack(false,'Room not found.');return}const existing=[...room.members.values()].find(x=>x.session===clean(payload?.session,100));if(room.players.size>=2 && !existing){if(typeof ack==='function')ack(false,'That room already has two players.');return}if(existing){existing.id=socket.id;room.players.set(socket.id,existing);socket.data.room=room.code;socket.data.playerId=existing.playerId;socket.data.session=existing.session;socket.join(room.code);socket.emit('session_ready',existing.session);broadcast(room);if(typeof ack==='function')ack(true,'Reconnected');return}addPlayer(socket,payload,room);systemChat(room,(clean(payload?.name,24)||'Player')+' connected.');broadcast(room);if(typeof ack==='function')ack(true,'Joined room')}catch(e){if(typeof ack==='function')ack(false,'Could not join the room')}});
+ socket.on('update_profile',payload=>{const room=getRoom(socket),p=me(room,socket);if(!room||!p)return;p.name=clean(payload?.name,24)||p.name;p.avatar=safeAvatar(payload?.avatar);p.accent=safeColor(payload?.accent,p.accent||'#72a7ff');p.accent2=safeColor(payload?.accent2,p.accent2||'#c17cff');p.bio=clean(payload?.bio,120);const wall=String(payload?.wallpaper||'');p.wallpaper=WALLPAPER_SET.has(wall)?wall:p.wallpaper||'midnight';const glow=String(payload?.glow||'');p.glow=GLOW_SET.has(glow)?glow:p.glow||'soft';const density=String(payload?.density||'');p.density=DENSITY_SET.has(density)?density:p.density||'cozy';const motion=String(payload?.motion||'');p.motion=MOTION_SET.has(motion)?motion:p.motion||'smooth';const contrast=String(payload?.contrast||'');p.contrast=CONTRAST_SET.has(contrast)?contrast:p.contrast||'balanced';if(p.session)data.connections[p.session]={code:room.code,playerId:p.playerId,accountId:p.accountId||null};saveRoom(room);broadcast(room)});
+ socket.on('set_ready',v=>{const room=getRoom(socket),p=me(room,socket);if(!room||!p||room.phase!=='lobby')return;p.ready=!!v;saveRoom(room);broadcast(room)});
+ socket.on('set_category',(c,ack)=>{const room=getRoom(socket),p=me(room,socket);if(!room||!p){if(typeof ack==='function')ack(false,'Join a private room first.');return}if(p.playerId!==room.hostPlayerId){if(typeof ack==='function')ack(false,'Only the room host can choose the game.');return}if(room.phase!=='lobby'||!QUESTIONS[c]){if(typeof ack==='function')ack(false,'Game setup is not available right now.');return}room.category=c;room.players.forEach(x=>x.ready=false);saveRoom(room);broadcast(room);if(typeof ack==='function')ack(true,'Game selected')});
+ socket.on('set_rounds',(n,ack)=>{const room=getRoom(socket),p=me(room,socket);if(!room||!p){if(typeof ack==='function')ack(false,'Join a private room first.');return}if(p.playerId!==room.hostPlayerId){if(typeof ack==='function')ack(false,'Only the room host can change rounds.');return}if(room.phase!=='lobby'){if(typeof ack==='function')ack(false,'Game setup is locked.');return}room.totalRounds=Math.max(3,Math.min(10,Number(n)||5));if(room.gameMode==='Quick Play')room.totalRounds=Math.min(3,room.totalRounds);room.players.forEach(x=>x.ready=false);saveRoom(room);broadcast(room);if(typeof ack==='function')ack(true,'Rounds updated')});
+ socket.on('set_mode',(m,ack)=>{const room=getRoom(socket),p=me(room,socket);if(!room||!p){if(typeof ack==='function')ack(false,'Join a private room first.');return}if(p.playerId!==room.hostPlayerId){if(typeof ack==='function')ack(false,'Only the room host can change mode.');return}if(room.phase!=='lobby'||!['Classic','Chaos','Quick Play'].includes(m)){if(typeof ack==='function')ack(false,'Game setup is locked.');return}room.gameMode=m;if(m==='Quick Play')room.totalRounds=Math.min(3,room.totalRounds);room.players.forEach(x=>x.ready=false);saveRoom(room);broadcast(room);if(typeof ack==='function')ack(true,'Mode updated')});
+ socket.on('start_game',(payload,ack)=>{const room=getRoom(socket),p=me(room,socket);if(!room||!p){if(typeof ack==='function')ack(false,'Join a private room first.');return}if(p.playerId!==room.hostPlayerId){if(typeof ack==='function')ack(false,'Only the room host can start the game.');return}if(room.phase!=='lobby'){if(typeof ack==='function')ack(false,'That game is already in progress.');return}if(room.players.size!==2){if(typeof ack==='function')ack(false,'Both players need to be connected first.');return}room.round=0;saveRoom(room);startRound(room);if(typeof ack==='function')ack(true,'Game started')});
+ socket.on('submit_turn',payload=>{const room=getRoom(socket),p=me(room,socket);if(!room||!p||room.phase!=='game')return;const cat=room.category;const type=clean(payload?.type,40);let value=payload?.value;if(typeof value==='string')value=clean(value,2500);const isActor=p.playerId===room.actorId;const isPredictor=p.playerId===room.predictorId;
+   if(room.roundStage==='both'&&(cat==='Would You Rather'||cat==='Flirty / Teasing'||cat==='Reaction Race')){if(room.answers[p.playerId]!=null)return;room.answers[p.playerId]=value;if(Object.keys(room.answers).length===2)finishRound(room);else{room.roundStage='both_wait';broadcast(room)}return}
+   if(cat==='Draw & Guess — Live'){if(type==='draw_done'&&isActor){room.roundStage='predictor';room.answers[room.actorId]='drawing-complete';broadcast(room)}else if(type==='guess'&&isPredictor){room.answers[room.predictorId]=value;finishRound(room,{guess:value})}return}
+   if(cat==='How Well Do You Know Me?'||cat==='Guess My Answer'){if(room.roundStage==='actor'&&isActor){room.answers[room.actorId]=value;room.roundStage='predictor';broadcast(room)}else if(room.roundStage==='predictor'&&isPredictor){room.answers[room.predictorId]=value;finishRound(room,{actorAnswer:room.answers[room.actorId],prediction:value})}return}
+   if(cat==='Truth or Dare'){if(room.roundStage==='actor'&&isActor){room.meta.choice=clean(payload?.choice,12)||'Truth';room.answers[room.actorId]=value;finishRound(room,{choice:room.meta.choice,response:value})}return}
+   if(cat==='Two Truths & A Lie'){if(room.roundStage==='actor'&&isActor){room.answers[room.actorId]=value;room.meta.lieIndex=Number(payload?.lieIndex);room.roundStage='predictor';broadcast(room)}else if(room.roundStage==='predictor'&&isPredictor){finishRound(room,{statements:decode(room.answers[room.actorId]),lieIndex:room.meta.lieIndex,pick:Number(payload?.lieIndex)})}return}
+   if(cat==='Guess The Vibe'){if(room.roundStage==='actor'&&isActor){room.meta.actual=clean(value,20);room.roundStage='predictor';broadcast(room)}else if(room.roundStage==='predictor'&&isPredictor){room.meta.prediction=clean(value,20);finishRound(room,{actual:room.meta.actual,prediction:room.meta.prediction})}return}
+   if(cat==='Card Flip'){if(room.roundStage==='actor'&&isActor){room.meta.card=clean(value,30);finishRound(room,{card:room.meta.card})}return}
+ });
+ socket.on('next_round',()=>{const room=getRoom(socket);if(!room||room.phase!=='results')return;if(room.round>=room.totalRounds){recordCompletion(room);room.phase='complete';room.roundStage='complete';saveRoom(room);io.to(room.code).emit('night_complete',{state:publicState(room)});broadcast(room);systemChat(room,'Night complete — shared streak updated.')}else startRound(room)});
+ socket.on('rematch',(ack)=>{const room=getRoom(socket),p=me(room,socket);if(!room||!p)return typeof ack==='function'&&ack(false,'Join a private room first.');if(p.playerId!==room.hostPlayerId)return typeof ack==='function'&&ack(false,'Only the room host can rematch the room.');room.phase='lobby';room.round=0;room.roundStage='idle';room.answers={};room.meta={};room.players.forEach(p=>p.ready=false);saveRoom(room);broadcast(room);if(typeof ack==='function')ack(true,'Lobby reset')});
+ socket.on('date_night',()=>{const room=getRoom(socket);if(!room)return;room.dateNight=DATE_NIGHTS[Math.floor(Math.random()*DATE_NIGHTS.length)];room.nights+=1;saveRoom(room);broadcast(room);io.to(room.code).emit('date_night_pick',room.dateNight)});
+ socket.on('chat',text=>{const room=getRoom(socket),p=me(room,socket);if(!room||!p||!room.chatEnabled)return;const t=clean(text,800);if(!t)return;const msg={id:socket.id+'-'+Date.now(),name:p.name,avatar:p.avatar,text:t,time:Date.now()};room.chat.push(msg);if(room.chat.length>200)room.chat.shift();saveRoom(room);io.to(room.code).emit('chat',msg)});
+ socket.on('typing',v=>{const room=getRoom(socket),p=me(room,socket);if(room&&p)socket.to(room.code).emit('typing',v?p.name:null)});
+ socket.on('music_load',url=>{const room=getRoom(socket);if(!room)return;const m=String(url||'').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([A-Za-z0-9_-]{11})/);if(!m)return socket.emit('error_message','Paste a valid YouTube link.');room.musicUrl=m[1];room.musicPosition=0;room.musicPlaying=false;room.musicOwnerId=socket.data.playerId||null;saveRoom(room);io.to(room.code).emit('music_sync',{type:'load',id:room.musicUrl,position:0,ownerId:room.musicOwnerId});broadcast(room)});
+ socket.on('music_command',p=>{const room=getRoom(socket);if(!room||!room.musicUrl)return;const t=p?.type;if(!['play','pause','seek'].includes(t))return;if(t==='seek'&&room.musicOwnerId&&room.musicOwnerId!==socket.data.playerId)return;if(t==='seek')room.musicPosition=Math.max(0,Number(p.position)||0);else {room.musicPlaying=t==='play';room.musicOwnerId=socket.data.playerId||room.musicOwnerId;}saveRoom(room);io.to(room.code).emit('music_sync',{type:t,position:room.musicPosition,ownerId:room.musicOwnerId});broadcast(room)});
+ socket.on('draw_stroke',d=>{const room=getRoom(socket),p=me(room,socket);if(!room||!p||room.phase!=='game'||room.category!=='Draw & Guess — Live'||p.playerId!==room.actorId)return;const norm=v=>[Math.min(1,Math.max(0,Number(v?.[0])||0)),Math.min(1,Math.max(0,Number(v?.[1])||0))];io.to(room.code).emit('draw_stroke',{from:norm(d?.from),to:norm(d?.to)});});
+ socket.on('draw_clear',()=>{const room=getRoom(socket),p=me(room,socket);if(room&&p&&room.category==='Draw & Guess — Live'&&p.playerId===room.actorId)io.to(room.code).emit('draw_clear')});
+ socket.on('disconnect',()=>{const room=getRoom(socket);if(!room)return;const p=room.players.get(socket.id);if(!p)return;p.id=null;room.players.delete(socket.id);if(room.players.size===0){room.phase='lobby';room.round=0;room.roundStage='idle'}saveRoom(room);broadcast(room)});
 });
-
-const PORT=process.env.PORT||3000;
-server.listen(PORT,()=>console.log(`Game Night running on port ${PORT}`));
+const PORT=process.env.PORT||3000;server.listen(PORT,()=>console.log(`Game Night ${APP_VERSION} listening on ${PORT}`));
