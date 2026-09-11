@@ -1,12 +1,12 @@
 {
   "name": "game-night",
-  "version": "3.0.1",
+  "version": "3.0.6",
   "lockfileVersion": 3,
   "requires": true,
   "packages": {
     "": {
       "name": "game-night",
-      "version": "3.0.1",
+      "version": "3.0.6",
       "dependencies": {
         "express": "^4.21.2",
         "google-auth-library": "^9.14.1",
