@@ -2,39 +2,87 @@
   "accounts": {},
   "accountSessions": {},
   "connections": {
-    "7eb1cf7c-7302-4c54-ae7e-905c6d3a6eec": {
-      "code": "HK5T6",
-      "playerId": "dd7af087-cf3a-419b-a16d-33a4e081f327",
+    "a3deaf73-c881-4763-9bde-5e11b95b5133": {
+      "code": "10522",
+      "playerId": "2d7f016e-60a4-495c-98ae-abfad8e32cd8",
       "accountId": null
     },
-    "96f7602a-2ef9-44e3-b66f-056f83545bb3": {
-      "code": "HK5T6",
-      "playerId": "58d9444b-61c7-4b8c-bd2c-10e52e0a137b",
+    "bc7d9227-cc99-4bc2-be54-12c1bd7414b7": {
+      "code": "10522",
+      "playerId": "e9cf6667-454b-4e1d-b654-ce650896bd4d",
       "accountId": null
     }
   },
   "rooms": {
-    "HK5T6": {
-      "code": "HK5T6",
-      "phase": "lobby",
-      "category": "Guess My Answer",
-      "round": 0,
-      "totalRounds": 7,
-      "gameMode": "Chaos",
+    "10522": {
+      "code": "10522",
+      "phase": "game",
+      "category": "Draw & Guess — Live",
+      "round": 2,
+      "totalRounds": 5,
+      "gameMode": "Classic",
       "chatEnabled": true,
       "chat": [
         {
-          "id": "system-1789071123069",
-          "system": true,
-          "text": "dee connected.",
-          "time": 1789071123069
-        },
-        {
-          "id": "z4yS0gkmq0DXG5TIAAAA-1789071141971",
+          "id": "mILZQGWc3aUdQTvoAAAE-1789115256868",
           "name": "dee",
           "avatar": "🌙",
-          "text": "hey bshid",
-          "time": 1789071141971
+          "text": "wsw",
+          "time": 1789115256868
+        },
+        {
+          "id": "mILZQGWc3aUdQTvoAAAE-1789115258688",
+          "name": "dee",
+          "avatar": "🌙",
+          "text": "ns",
+          "time": 1789115258688
+        },
+        {
+          "id": "mILZQGWc3aUdQTvoAAAE-1789115260666",
+          "name": "dee",
+          "avatar": "🌙",
+          "text": "❤️ ns",
+          "time": 1789115260666
+        },
+        {
+          "id": "mILZQGWc3aUdQTvoAAAE-1789115262120",
+          "name": "dee",
+          "avatar": "🌙",
+          "text": "❤️ ❤️ ns",
+          "time": 1789115262120
+        },
+        {
+          "id": "mILZQGWc3aUdQTvoAAAE-1789115264093",
+          "name": "dee",
+          "avatar": "🌙",
+          "text": "❤️ ❤️ ❤️ ns",
+          "time": 1789115264093
+        },
+        {
+          "id": "mILZQGWc3aUdQTvoAAAE-1789115265177",
+          "name": "dee",
+          "avatar": "🌙",
+          "text": "❤️ ❤️ ❤️ ❤️ ns",
+          "time": 1789115265177
+        },
+        {
+          "id": "mILZQGWc3aUdQTvoAAAE-1789115265455",
+          "name": "dee",
+          "avatar": "🌙",
+          "text": "😂 ❤️ ❤️ ❤️ ❤️ ns",
+          "time": 1789115265455
+        },
+        {
+          "id": "system-1789115570572",
+          "system": true,
+          "text": "Player connected.",
+          "time": 1789115570572
+        },
+        {
+          "id": "system-1789115627527",
+          "system": true,
+          "text": "dee ended the game.",
+          "time": 1789115627527
         }
       ],
       "musicUrl": "",
@@ -47,24 +95,209 @@
       "bestStreak": 0,
       "nights": 0,
       "lastCompletedDay": null,
-      "hostPlayerId": "dd7af087-cf3a-419b-a16d-33a4e081f327",
-      "roundStage": "idle",
-      "actorId": "dd7af087-cf3a-419b-a16d-33a4e081f327",
-      "predictorId": "58d9444b-61c7-4b8c-bd2c-10e52e0a137b",
-      "prompt": "What would I pick for a perfect evening together?",
+      "hostPlayerId": "2d7f016e-60a4-495c-98ae-abfad8e32cd8",
+      "roundStage": "actor",
+      "actorId": "e9cf6667-454b-4e1d-b654-ce650896bd4d",
+      "predictorId": "2d7f016e-60a4-495c-98ae-abfad8e32cd8",
+      "prompt": "Draw your duo as a cute cartoon.",
       "hiddenPrompt": "",
       "answers": {},
       "meta": {},
+      "drawStrokes": [
+        {
+          "strokeId": "fb6316bf-37d6-443c-a57d-af053987a7bc",
+          "from": [
+            0.10894943118559247,
+            0.23385413033621652
+          ],
+          "to": [
+            0.11284048176925006,
+            0.24337801252092633
+          ],
+          "color": "#72a7ff",
+          "width": 6,
+          "tool": "pen"
+        },
+        {
+          "strokeId": "fb6316bf-37d6-443c-a57d-af053987a7bc",
+          "from": [
+            0.11284048176925006,
+            0.24337801252092633
+          ],
+          "to": [
+            0.11802852942322015,
+            0.2624255589076451
+          ],
+          "color": "#72a7ff",
+          "width": 6,
+          "tool": "pen"
+        },
+        {
+          "strokeId": "fb6316bf-37d6-443c-a57d-af053987a7bc",
+          "from": [
+            0.11802852942322015,
+            0.2624255589076451
+          ],
+          "to": [
+            0.12970168117419292,
+            0.29575892857142855
+          ],
+          "color": "#72a7ff",
+          "width": 6,
+          "tool": "pen"
+        },
+        {
+          "strokeId": "fb6316bf-37d6-443c-a57d-af053987a7bc",
+          "from": [
+            0.12970168117419292,
+            0.29575892857142855
+          ],
+          "to": [
+            0.1374837823415081,
+            0.3219494410923549
+          ],
+          "color": "#72a7ff",
+          "width": 6,
+          "tool": "pen"
+        },
+        {
+          "strokeId": "fb6316bf-37d6-443c-a57d-af053987a7bc",
+          "from": [
+            0.1374837823415081,
+            0.3219494410923549
+          ],
+          "to": [
+            0.14526588350882327,
+            0.34099698747907364
+          ],
+          "color": "#72a7ff",
+          "width": 6,
+          "tool": "pen"
+        },
+        {
+          "strokeId": "fb6316bf-37d6-443c-a57d-af053987a7bc",
+          "from": [
+            0.14526588350882327,
+            0.34099698747907364
+          ],
+          "to": [
+            0.15304798467613845,
+            0.3600446428571429
+          ],
+          "color": "#72a7ff",
+          "width": 6,
+          "tool": "pen"
+        },
+        {
+          "strokeId": "fb6316bf-37d6-443c-a57d-af053987a7bc",
+          "from": [
+            0.15304798467613845,
+            0.3600446428571429
+          ],
+          "to": [
+            0.15823606201646856,
+            0.3671875
+          ],
+          "color": "#72a7ff",
+          "width": 6,
+          "tool": "pen"
+        },
+        {
+          "strokeId": "fb6316bf-37d6-443c-a57d-af053987a7bc",
+          "from": [
+            0.15823606201646856,
+            0.3671875
+          ],
+          "to": [
+            0.1634241393567987,
+            0.3719494410923549
+          ],
+          "color": "#72a7ff",
+          "width": 6,
+          "tool": "pen"
+        },
+        {
+          "strokeId": "fb6316bf-37d6-443c-a57d-af053987a7bc",
+          "from": [
+            0.1634241393567987,
+            0.3719494410923549
+          ],
+          "to": [
+            0.18158236551841409,
+            0.3671875
+          ],
+          "color": "#72a7ff",
+          "width": 6,
+          "tool": "pen"
+        },
+        {
+          "strokeId": "fb6316bf-37d6-443c-a57d-af053987a7bc",
+          "from": [
+            0.18158236551841409,
+            0.3671875
+          ],
+          "to": [
+            0.21011674636068975,
+            0.34099698747907364
+          ],
+          "color": "#72a7ff",
+          "width": 6,
+          "tool": "pen"
+        },
+        {
+          "strokeId": "fb6316bf-37d6-443c-a57d-af053987a7bc",
+          "from": [
+            0.21011674636068975,
+            0.34099698747907364
+          ],
+          "to": [
+            0.2308689963492902,
+            0.3171875
+          ],
+          "color": "#72a7ff",
+          "width": 6,
+          "tool": "pen"
+        },
+        {
+          "strokeId": "fb6316bf-37d6-443c-a57d-af053987a7bc",
+          "from": [
+            0.2308689963492902,
+            0.3171875
+          ],
+          "to": [
+            0.2438391748569355,
+            0.3005208696637835
+          ],
+          "color": "#72a7ff",
+          "width": 6,
+          "tool": "pen"
+        },
+        {
+          "strokeId": "fb6316bf-37d6-443c-a57d-af053987a7bc",
+          "from": [
+            0.2438391748569355,
+            0.3005208696637835
+          ],
+          "to": [
+            0.24643319868392055,
+            0.2981398446219308
+          ],
+          "color": "#72a7ff",
+          "width": 6,
+          "tool": "pen"
+        }
+      ],
+      "resultAdvanced": false,
       "members": [
         {
           "id": null,
-          "playerId": "dd7af087-cf3a-419b-a16d-33a4e081f327",
-          "session": "7eb1cf7c-7302-4c54-ae7e-905c6d3a6eec",
+          "playerId": "2d7f016e-60a4-495c-98ae-abfad8e32cd8",
+          "session": "a3deaf73-c881-4763-9bde-5e11b95b5133",
           "accountId": null,
           "name": "dee",
           "avatar": "🌙",
           "accent": "#72a7ff",
-          "accent2": "#c17cff",
+          "accent2": "#ffffff",
           "bio": "",
           "wallpaper": "midnight",
           "glow": "soft",
@@ -76,10 +309,10 @@
         },
         {
           "id": null,
-          "playerId": "58d9444b-61c7-4b8c-bd2c-10e52e0a137b",
-          "session": "96f7602a-2ef9-44e3-b66f-056f83545bb3",
+          "playerId": "e9cf6667-454b-4e1d-b654-ce650896bd4d",
+          "session": "bc7d9227-cc99-4bc2-be54-12c1bd7414b7",
           "accountId": null,
-          "name": "dee",
+          "name": "Player",
           "avatar": "🌙",
           "accent": "#72a7ff",
           "accent2": "#c17cff",
