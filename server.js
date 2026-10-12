@@ -19,7 +19,7 @@ function saveData(){try{fs.writeFileSync(DATA_FILE,JSON.stringify(data,null,2))}
 function clean(v,n=160){return String(v??'').replace(/[<>]/g,'').trim().slice(0,n)}
 function token(){return crypto.randomBytes(24).toString('hex')}
 const ADMIN_EMAIL=String(process.env.GAME_NIGHT_ADMIN_EMAIL||'').trim().toLowerCase();
-const FREE_EMAILS=new Set(String(process.env.GAME_NIGHT_FREE_EMAILS||'').split(/[;,\\n]/).map(x=>x.trim().toLowerCase()).filter(Boolean));
+const FREE_EMAILS=new Set(String(process.env.GAME_NIGHT_FREE_EMAILS||'').split(/[;,]/).map(x=>x.trim().toLowerCase()).filter(Boolean));
 if(ADMIN_EMAIL)FREE_EMAILS.add(ADMIN_EMAIL);
 function accessFor(account){const email=String(account?.email||'').trim().toLowerCase();const admin=Boolean(email&&ADMIN_EMAIL&&email===ADMIN_EMAIL);const friend=Boolean(email&&FREE_EMAILS.has(email));return {role:admin?'admin':'member',plan:friend?'complimentary':'free',premiumAccess:friend,reason:admin?'creator account':friend?'creator-approved friend':'standard account'};}
 function accountPayload(account){return {id:account.id,name:account.name,email:account.email||'',picture:account.picture||'',session:account.session,authenticated:true,provider:account.provider||'google',access:accessFor(account)}}
