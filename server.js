@@ -18,10 +18,16 @@ data.accounts ||= {}; data.accountSessions ||= {}; data.connections ||= {}; data
 function saveData(){try{fs.writeFileSync(DATA_FILE,JSON.stringify(data,null,2))}catch{}}
 function clean(v,n=160){return String(v??'').replace(/[<>]/g,'').trim().slice(0,n)}
 function token(){return crypto.randomBytes(24).toString('hex')}
+const ADMIN_EMAIL=String(process.env.GAME_NIGHT_ADMIN_EMAIL||'').trim().toLowerCase();
+const FREE_EMAILS=new Set(String(process.env.GAME_NIGHT_FREE_EMAILS||'').split(/[;,]/).map(x=>x.trim().toLowerCase()).filter(Boolean));
+if(ADMIN_EMAIL)FREE_EMAILS.add(ADMIN_EMAIL);
+function accessFor(account){const email=String(account?.email||'').trim().toLowerCase();const admin=Boolean(email&&ADMIN_EMAIL&&email===ADMIN_EMAIL);const friend=Boolean(email&&FREE_EMAILS.has(email));return {role:admin?'admin':'member',plan:friend?'complimentary':'free',premiumAccess:friend,reason:admin?'creator account':friend?'creator-approved friend':'standard account'};}
+function accountPayload(account){return {id:account.id,name:account.name,email:account.email||'',picture:account.picture||'',session:account.session,authenticated:true,provider:account.provider||'google',access:accessFor(account)}}
 function dayKey(){return new Date().toISOString().slice(0,10)}
 const GOOGLE_CLIENT_ID=process.env.GOOGLE_CLIENT_ID||'';
 const googleClient=GOOGLE_CLIENT_ID?new OAuth2Client(GOOGLE_CLIENT_ID):null;
 app.get('/api/config',(req,res)=>res.json({version:APP_VERSION,googleClientId:GOOGLE_CLIENT_ID,pwa:true}));
+app.post('/api/access/status',(req,res)=>{const session=clean(req.body?.session,100);const accountId=data.accountSessions[session];if(!session||!accountId)return res.status(401).json({error:'Please sign in again.'});const account=Object.values(data.accounts).find(a=>a.id===accountId&&a.session===session);if(!account)return res.status(401).json({error:'Please sign in again.'});res.json({access:accessFor(account)});});
 app.post('/api/auth/email',(req,res)=>{try{
  const mode=req.body?.mode==='register'?'register':'login';
  const email=String(req.body?.email||'').trim().toLowerCase();
@@ -42,14 +48,14 @@ app.post('/api/auth/email',(req,res)=>{try{
   if(expected.length!==actual.length||!crypto.timingSafeEqual(actual,expected))return res.status(401).json({error:'Email or password is incorrect.'});
  }
  account.session=token();account.updatedAt=Date.now();data.accounts[key]=account;data.accountSessions[account.session]=account.id;saveData();
- res.json({account:{id:account.id,name:account.name,email:account.email,picture:account.picture||'',session:account.session,authenticated:true,provider:'email'}});
+ res.json({account:accountPayload(account)});
 }catch(e){res.status(500).json({error:'Could not sign in right now. Please try again.'})}});
 app.post('/api/auth/session',(req,res)=>{
  const session=clean(req.body?.session,100);const accountId=data.accountSessions[session];
  if(!session||!accountId)return res.status(401).json({error:'Please sign in again.'});
  const account=Object.values(data.accounts).find(a=>a.id===accountId&&a.session===session);
  if(!account)return res.status(401).json({error:'Please sign in again.'});
- res.json({account:{id:account.id,name:account.name,email:account.email||'',picture:account.picture||'',session:account.session,authenticated:true,provider:account.provider||'google'}});
+ res.json({account:accountPayload(account)});
 });
 app.post('/api/auth/google',async(req,res)=>{try{
  if(!googleClient)return res.status(503).json({error:'Google sign-in is not configured on this deployment.'});
@@ -58,7 +64,7 @@ app.post('/api/auth/google',async(req,res)=>{try{
  let account=data.accounts[p.sub]||{id:crypto.randomUUID(),googleSub:p.sub,provider:'google',createdAt:Date.now()};
  account.name=clean(account.name||p.name||'Player',24)||'Player'; account.email=clean(account.email||p.email||'',160); account.picture=clean(account.picture||p.picture||'',1200); account.updatedAt=Date.now(); account.session=token();
  data.accounts[p.sub]=account; data.accountSessions[account.session]=account.id; saveData();
- res.json({account:{id:account.id,name:account.name,email:account.email,picture:account.picture,session:account.session,authenticated:true,provider:'google'}});
+ res.json({account:accountPayload(account)});
 }catch(e){res.status(401).json({error:'Google credential verification failed.'})}});
 const QUESTIONS = {
   "Would You Rather": [
@@ -226,7 +232,7 @@ function getRoom(s){return rooms.get(s.data.room)||null}
 function me(room,s){return room?.players.get(s.id)||null}
 function other(room,pid){return [...room.players.values()].find(p=>p.playerId!==pid)||null}
 function createRoom(code){const room={code,players:new Map(),members:new Map(),phase:'lobby',category:'Would You Rather',round:0,totalRounds:5,gameMode:'Classic',chatEnabled:true,chat:[],musicUrl:'',musicPlaying:false,musicPosition:0,musicOwnerId:null,dateNight:null,gamesPlayed:0,hostPlayerId:null,streak:0,bestStreak:0,nights:0,lastCompletedDay:null,roundStage:'idle',actorId:null,predictorId:null,prompt:'',hiddenPrompt:'',answers:{},meta:{},drawStrokes:[],drawRedo:[],resultAdvanced:false};rooms.set(code,room);saveRoom(room);return room}
-function serializeRoom(room){return {code:room.code,phase:room.phase,category:room.category,round:room.round,totalRounds:room.totalRounds,gameMode:room.gameMode,chatEnabled:room.chatEnabled,chat:room.chat.slice(-200),musicUrl:room.musicUrl,musicPlaying:room.musicPlaying,musicPosition:room.musicPosition,musicOwnerId:room.musicOwnerId,dateNight:room.dateNight,gamesPlayed:room.gamesPlayed,streak:room.streak,bestStreak:room.bestStreak,nights:room.nights,lastCompletedDay:room.lastCompletedDay,hostPlayerId:room.hostPlayerId,roundStage:room.roundStage,actorId:room.actorId,predictorId:room.predictorId,prompt:room.prompt,hiddenPrompt:room.hiddenPrompt,answers:room.answers,meta:room.meta,drawStrokes:room.drawStrokes||[],resultAdvanced:!!room.resultAdvanced,members:[...room.members.values()].map(p=>({...p,id:null,ready:false}))}}
+function serializeRoom(room){return {code:room.code,phase:room.phase,category:room.category,round:room.round,totalRounds:room.totalRounds,gameMode:room.gameMode,chatEnabled:room.chatEnabled,chat:room.chat.slice(-200),musicUrl:room.musicUrl,musicPlaying:room.musicPlaying,musicPosition:room.musicPosition,musicOwnerId:room.musicOwnerId,dateNight:room.dateNight,gamesPlayed:room.gamesPlayed,streak:room.streak,bestStreak:room.bestStreak,nights:room.nights,lastCompletedDay:room.lastCompletedDay,lastPresenceDay:room.lastPresenceDay||null,hostPlayerId:room.hostPlayerId,roundStage:room.roundStage,actorId:room.actorId,predictorId:room.predictorId,prompt:room.prompt,hiddenPrompt:room.hiddenPrompt,answers:room.answers,meta:room.meta,drawStrokes:room.drawStrokes||[],resultAdvanced:!!room.resultAdvanced,members:[...room.members.values()].map(p=>({...p,id:null,ready:false}))}}
 function saveRoom(room){data.rooms[room.code]=serializeRoom(room);saveData()}
 function loadRoom(code){const raw=data.rooms?.[code];if(!raw)return null;const room={...raw,players:new Map(),members:new Map(),chat:Array.isArray(raw.chat)?raw.chat:[],answers:raw.answers||{},meta:raw.meta||{},drawStrokes:Array.isArray(raw.drawStrokes)?raw.drawStrokes:[],drawRedo:[],resultAdvanced:!!raw.resultAdvanced};(raw.members||[]).forEach(p=>room.members.set(p.playerId,{...p,id:null,ready:false,host:!!p.host})); if(!room.hostPlayerId){const first=[...room.members.values()][0];room.hostPlayerId=first?.playerId||null;if(first)first.host=true;} else {room.members.forEach(m=>{m.host=m.playerId===room.hostPlayerId})} rooms.set(code,room);return room}
 function addPlayer(socket,payload,room){const isFirst=room.members.size===0;const p={id:socket.id,playerId:crypto.randomUUID(),session:clean(payload?.session,100)||token(),accountId:clean(payload?.accountId,100)||null,name:clean(payload?.name,24)||'Player',avatar:safeAvatar(payload?.avatar),accent:safeColor(payload?.accent,'#72a7ff'),accent2:safeColor(payload?.accent2,'#c17cff'),bio:clean(payload?.bio,120)||'',wallpaper:WALLPAPER_SET.has(String(payload?.wallpaper||''))?String(payload.wallpaper):'midnight',glow:GLOW_SET.has(String(payload?.glow||''))?String(payload.glow):'soft',density:DENSITY_SET.has(String(payload?.density||''))?String(payload.density):'cozy',motion:MOTION_SET.has(String(payload?.motion||''))?String(payload.motion):'reduced',contrast:CONTRAST_SET.has(String(payload?.contrast||''))?String(payload.contrast):'balanced',ready:false,host:isFirst}; if(isFirst)room.hostPlayerId=p.playerId; room.players.set(socket.id,p);room.members.set(p.playerId,p); socket.data.room=room.code; socket.data.playerId=p.playerId; socket.data.session=p.session; socket.join(room.code); data.connections[p.session]={code:room.code,playerId:p.playerId,accountId:p.accountId||null}; saveData(); socket.emit('session_ready',p.session); return p}
@@ -236,10 +242,11 @@ function startRound(room){room.phase='game';room.round++;room.answers={};room.me
  if(room.category==='Would You Rather'||room.category==='Flirty / Teasing'||room.category==='Reaction Race')room.roundStage='both'; else room.roundStage='actor';
  room.players.forEach(p=>{const sock=io.sockets.sockets.get(p.id);if(sock)sock.emit('round_started',{state:stateFor(room,p.playerId)})}); broadcast(room)}
 function stateFor(room,playerId){const s=publicState(room);if(room.phase==='game'&&room.category==='Draw & Guess — Live'&&playerId!==room.actorId)s.prompt='🎨 Watch the drawing and guess what your partner is creating.';return s}
-function broadcast(room){saveRoom(room);room.players.forEach(p=>{const sock=io.sockets.sockets.get(p.id);if(sock)sock.emit('state',stateFor(room,p.playerId))})}
+function recordPresenceStreak(room){const d=dayKey();if(room.players.size<2||room.lastPresenceDay===d)return;if(room.lastPresenceDay){const previous=new Date(room.lastPresenceDay+'T00:00:00Z');const today=new Date(d+'T00:00:00Z');const days=Math.round((today-previous)/86400000);room.streak=days===1?(room.streak||0)+1:1}else{room.streak=1}room.bestStreak=Math.max(room.bestStreak||0,room.streak);room.lastPresenceDay=d}
+function broadcast(room){recordPresenceStreak(room);saveRoom(room);room.players.forEach(p=>{const sock=io.sockets.sockets.get(p.id);if(sock)sock.emit('state',stateFor(room,p.playerId))})}
 function systemChat(room,text){const msg={id:'system-'+Date.now(),system:true,text,time:Date.now()};room.chat.push(msg);io.to(room.code).emit('chat',msg)}
 function finishRound(room,extra={}){room.phase='results';room.roundStage='complete';io.to(room.code).emit('round_results',{state:publicState(room),answers:room.answers,...extra}) ;broadcast(room)}
-function recordCompletion(room){room.gamesPlayed+=1;room.nights+=1;const d=dayKey();if(room.lastCompletedDay!==d){room.streak+=1;room.bestStreak=Math.max(room.bestStreak,room.streak);room.lastCompletedDay=d}}
+function recordCompletion(room){room.gamesPlayed+=1;room.nights+=1}
 function decode(v){try{return JSON.parse(v)}catch{return v}}
 io.on('connection',socket=>{
  socket.on('resume_session',session=>{const rec=data.connections?.[clean(session,100)];if(!rec)return socket.emit('resume_failed');let room=rooms.get(rec.code)||loadRoom(rec.code);if(!room)return socket.emit('resume_failed');const saved=room.members.get(rec.playerId);if(!saved)return socket.emit('resume_failed');const oldSocketId=saved.id; if(oldSocketId && oldSocketId!==socket.id) room.players.delete(oldSocketId); saved.id=socket.id; saved.session=clean(session,100); room.players.set(socket.id,saved); socket.data.room=room.code; socket.data.playerId=saved.playerId; socket.data.session=saved.session; socket.join(room.code); broadcast(room); socket.emit('resume_ok',stateFor(room,saved.playerId))});
