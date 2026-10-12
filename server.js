@@ -18,10 +18,16 @@ data.accounts ||= {}; data.accountSessions ||= {}; data.connections ||= {}; data
 function saveData(){try{fs.writeFileSync(DATA_FILE,JSON.stringify(data,null,2))}catch{}}
 function clean(v,n=160){return String(v??'').replace(/[<>]/g,'').trim().slice(0,n)}
 function token(){return crypto.randomBytes(24).toString('hex')}
+const ADMIN_EMAIL=String(process.env.GAME_NIGHT_ADMIN_EMAIL||'').trim().toLowerCase();
+const FREE_EMAILS=new Set(String(process.env.GAME_NIGHT_FREE_EMAILS||'').split(/[;,\\n]/).map(x=>x.trim().toLowerCase()).filter(Boolean));
+if(ADMIN_EMAIL)FREE_EMAILS.add(ADMIN_EMAIL);
+function accessFor(account){const email=String(account?.email||'').trim().toLowerCase();const admin=Boolean(email&&ADMIN_EMAIL&&email===ADMIN_EMAIL);const friend=Boolean(email&&FREE_EMAILS.has(email));return {role:admin?'admin':'member',plan:friend?'complimentary':'free',premiumAccess:friend,reason:admin?'creator account':friend?'creator-approved friend':'standard account'};}
+function accountPayload(account){return {id:account.id,name:account.name,email:account.email||'',picture:account.picture||'',session:account.session,authenticated:true,provider:account.provider||'google',access:accessFor(account)}}
 function dayKey(){return new Date().toISOString().slice(0,10)}
 const GOOGLE_CLIENT_ID=process.env.GOOGLE_CLIENT_ID||'';
 const googleClient=GOOGLE_CLIENT_ID?new OAuth2Client(GOOGLE_CLIENT_ID):null;
 app.get('/api/config',(req,res)=>res.json({version:APP_VERSION,googleClientId:GOOGLE_CLIENT_ID,pwa:true}));
+app.post('/api/access/status',(req,res)=>{const session=clean(req.body?.session,100);const accountId=data.accountSessions[session];if(!session||!accountId)return res.status(401).json({error:'Please sign in again.'});const account=Object.values(data.accounts).find(a=>a.id===accountId&&a.session===session);if(!account)return res.status(401).json({error:'Please sign in again.'});res.json({access:accessFor(account)});});
 app.post('/api/auth/email',(req,res)=>{try{
  const mode=req.body?.mode==='register'?'register':'login';
  const email=String(req.body?.email||'').trim().toLowerCase();
@@ -42,14 +48,14 @@ app.post('/api/auth/email',(req,res)=>{try{
   if(expected.length!==actual.length||!crypto.timingSafeEqual(actual,expected))return res.status(401).json({error:'Email or password is incorrect.'});
  }
  account.session=token();account.updatedAt=Date.now();data.accounts[key]=account;data.accountSessions[account.session]=account.id;saveData();
- res.json({account:{id:account.id,name:account.name,email:account.email,picture:account.picture||'',session:account.session,authenticated:true,provider:'email'}});
+ res.json({account:accountPayload(account)});
 }catch(e){res.status(500).json({error:'Could not sign in right now. Please try again.'})}});
 app.post('/api/auth/session',(req,res)=>{
  const session=clean(req.body?.session,100);const accountId=data.accountSessions[session];
  if(!session||!accountId)return res.status(401).json({error:'Please sign in again.'});
  const account=Object.values(data.accounts).find(a=>a.id===accountId&&a.session===session);
  if(!account)return res.status(401).json({error:'Please sign in again.'});
- res.json({account:{id:account.id,name:account.name,email:account.email||'',picture:account.picture||'',session:account.session,authenticated:true,provider:account.provider||'google'}});
+ res.json({account:accountPayload(account)});
 });
 app.post('/api/auth/google',async(req,res)=>{try{
  if(!googleClient)return res.status(503).json({error:'Google sign-in is not configured on this deployment.'});
@@ -58,7 +64,7 @@ app.post('/api/auth/google',async(req,res)=>{try{
  let account=data.accounts[p.sub]||{id:crypto.randomUUID(),googleSub:p.sub,provider:'google',createdAt:Date.now()};
  account.name=clean(account.name||p.name||'Player',24)||'Player'; account.email=clean(account.email||p.email||'',160); account.picture=clean(account.picture||p.picture||'',1200); account.updatedAt=Date.now(); account.session=token();
  data.accounts[p.sub]=account; data.accountSessions[account.session]=account.id; saveData();
- res.json({account:{id:account.id,name:account.name,email:account.email,picture:account.picture,session:account.session,authenticated:true,provider:'google'}});
+ res.json({account:accountPayload(account)});
 }catch(e){res.status(401).json({error:'Google credential verification failed.'})}});
 const QUESTIONS = {
   "Would You Rather": [
