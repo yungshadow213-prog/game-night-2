@@ -258,8 +258,7 @@ function startRound(room){room.phase='game';room.round++;room.answers={};room.me
  if(room.category==='Would You Rather'||room.category==='Flirty / Teasing'||room.category==='Reaction Race')room.roundStage='both'; else room.roundStage='actor';
  room.players.forEach(p=>{const sock=io.sockets.sockets.get(p.id);if(sock)sock.emit('round_started',{state:stateFor(room,p.playerId)})}); broadcast(room)}
 function stateFor(room,playerId){const s=publicState(room);if(room.phase==='game'&&room.category==='Draw & Guess — Live'&&playerId!==room.actorId)s.prompt='🎨 Watch the drawing and guess what your partner is creating.';return s}
-function recordPresenceStreak(room){const d=dayKey();if(room.players.size<2||room.lastPresenceDay===d)return;if(room.lastPresenceDay){const previous=new Date(room.lastPresenceDay+'T00:00:00Z');const today=new Date(d+'T00:00:00Z');const days=Math.round((today-previous)/86400000);room.streak=days===1?(room.streak||0)+1:1}else{room.streak=1}room.bestStreak=Math.max(room.bestStreak||0,room.streak);room.lastPresenceDay=d}
-function broadcast(room){recordPresenceStreak(room);saveRoom(room);room.players.forEach(p=>{const sock=io.sockets.sockets.get(p.id);if(sock)sock.emit('state',stateFor(room,p.playerId))})}
+function broadcast(room){saveRoom(room);room.players.forEach(p=>{const sock=io.sockets.sockets.get(p.id);if(sock)sock.emit('state',stateFor(room,p.playerId))})}
 function systemChat(room,text){const msg={id:'system-'+Date.now(),system:true,text,time:Date.now()};room.chat.push(msg);io.to(room.code).emit('chat',msg)}
 function finishRound(room,extra={}){room.phase='results';room.roundStage='complete';io.to(room.code).emit('round_results',{state:publicState(room),answers:room.answers,...extra}) ;broadcast(room)}
 function recordCompletion(room){room.gamesPlayed+=1;room.nights+=1;const active=[...room.players.values()].filter(p=>p.accountId).slice(0,2);if(active.length===2)markPairStreak(active[0].accountId,active[1].accountId)}
