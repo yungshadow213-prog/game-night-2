@@ -22,6 +22,35 @@ function dayKey(){return new Date().toISOString().slice(0,10)}
 const GOOGLE_CLIENT_ID=process.env.GOOGLE_CLIENT_ID||'';
 const googleClient=GOOGLE_CLIENT_ID?new OAuth2Client(GOOGLE_CLIENT_ID):null;
 app.get('/api/config',(req,res)=>res.json({version:APP_VERSION,googleClientId:GOOGLE_CLIENT_ID,pwa:true}));
+app.post('/api/auth/email',(req,res)=>{try{
+ const mode=req.body?.mode==='register'?'register':'login';
+ const email=String(req.body?.email||'').trim().toLowerCase();
+ const password=String(req.body?.password||'');
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)return res.status(400).json({error:'Enter a valid email address.'});
+ if(password.length<8||password.length>256)return res.status(400).json({error:'Password must be between 8 and 256 characters.'});
+ const key='email:'+email;
+ let account=data.accounts[key];
+ if(mode==='register'){
+  if(account)return res.status(409).json({error:'An account already exists for this email. Sign in instead.'});
+  const salt=crypto.randomBytes(16).toString('hex');
+  const passwordHash=crypto.scryptSync(password,salt,64).toString('hex');
+  account={id:crypto.randomUUID(),provider:'email',email,name:clean(req.body?.name||email.split('@')[0],24)||'Player',picture:'',passwordSalt:salt,passwordHash,createdAt:Date.now()};
+ }else{
+  if(!account||!account.passwordSalt||!account.passwordHash)return res.status(401).json({error:'Email or password is incorrect.'});
+  const expected=Buffer.from(account.passwordHash,'hex');
+  const actual=crypto.scryptSync(password,account.passwordSalt,64);
+  if(expected.length!==actual.length||!crypto.timingSafeEqual(actual,expected))return res.status(401).json({error:'Email or password is incorrect.'});
+ }
+ account.session=token();account.updatedAt=Date.now();data.accounts[key]=account;data.accountSessions[account.session]=account.id;saveData();
+ res.json({account:{id:account.id,name:account.name,email:account.email,picture:account.picture||'',session:account.session,authenticated:true,provider:'email'}});
+}catch(e){res.status(500).json({error:'Could not sign in right now. Please try again.'})}});
+app.post('/api/auth/session',(req,res)=>{
+ const session=clean(req.body?.session,100);const accountId=data.accountSessions[session];
+ if(!session||!accountId)return res.status(401).json({error:'Please sign in again.'});
+ const account=Object.values(data.accounts).find(a=>a.id===accountId&&a.session===session);
+ if(!account)return res.status(401).json({error:'Please sign in again.'});
+ res.json({account:{id:account.id,name:account.name,email:account.email||'',picture:account.picture||'',session:account.session,authenticated:true,provider:account.provider||'google'}});
+});
 app.post('/api/auth/google',async(req,res)=>{try{
  if(!googleClient)return res.status(503).json({error:'Google sign-in is not configured on this deployment.'});
  const ticket=await googleClient.verifyIdToken({idToken:String(req.body?.credential||''),audience:GOOGLE_CLIENT_ID});
@@ -29,7 +58,7 @@ app.post('/api/auth/google',async(req,res)=>{try{
  let account=data.accounts[p.sub]||{id:crypto.randomUUID(),googleSub:p.sub,provider:'google',createdAt:Date.now()};
  account.name=clean(account.name||p.name||'Player',24)||'Player'; account.email=clean(account.email||p.email||'',160); account.picture=clean(account.picture||p.picture||'',1200); account.updatedAt=Date.now(); account.session=token();
  data.accounts[p.sub]=account; data.accountSessions[account.session]=account.id; saveData();
- res.json({account:{id:account.id,name:account.name,email:account.email,picture:account.picture,session:account.session,authenticated:true}});
+ res.json({account:{id:account.id,name:account.name,email:account.email,picture:account.picture,session:account.session,authenticated:true,provider:'google'}});
 }catch(e){res.status(401).json({error:'Google credential verification failed.'})}});
 const QUESTIONS = {
   "Would You Rather": [
